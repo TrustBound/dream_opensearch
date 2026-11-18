@@ -14,6 +14,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Moved to its own repository
 - `send_request` returns an error, and sends no request, when the URL cannot be parsed, has no host, or has invalid percent-encoding in the user name or password (for example `"Invalid OpenSearch URL: the URL has no host"`). Before, it tried to connect and returned a connection error. No error message contains the user name or password.
 
 ### Upgrading
