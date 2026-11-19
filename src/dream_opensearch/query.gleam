@@ -6,7 +6,7 @@
 ////
 //// ## Quick Start
 ////
-//// ### Search with query builders <a href="https://github.com/TrustBound/dream_opensearch/blob/2.0.0/test/snippets/doc_query_quick_start.gleam#L3-L17"><img align="right" alt="Tested snippet" src="https://img.shields.io/badge/%F0%9F%A7%AA_tested-snippet-lightgreen.svg?style=flat-square"></a>
+//// ### Search with query builders <a href="https://github.com/TrustBound/dream_opensearch/blob/3.0.0/test/snippets/doc_query_quick_start.gleam#L3-L17"><img align="right" alt="Tested snippet" src="https://img.shields.io/badge/%F0%9F%A7%AA_tested-snippet-lightgreen.svg?style=flat-square"></a>
 ////
 //// ```gleam
 //// import dream_opensearch/client.{type Client}
@@ -30,7 +30,7 @@
 ////
 //// For complex queries, build the JSON manually using `gleam/json`:
 ////
-//// ### Build a custom query <a href="https://github.com/TrustBound/dream_opensearch/blob/2.0.0/test/snippets/doc_query_custom.gleam#L3-L27"><img align="right" alt="Tested snippet" src="https://img.shields.io/badge/%F0%9F%A7%AA_tested-snippet-lightgreen.svg?style=flat-square"></a>
+//// ### Build a custom query <a href="https://github.com/TrustBound/dream_opensearch/blob/3.0.0/test/snippets/doc_query_custom.gleam#L3-L27"><img align="right" alt="Tested snippet" src="https://img.shields.io/badge/%F0%9F%A7%AA_tested-snippet-lightgreen.svg?style=flat-square"></a>
 ////
 //// ```gleam
 //// import gleam/json
@@ -78,7 +78,7 @@ import gleam/json
 ///
 /// ## Example
 ///
-/// ### Search all documents <a href="https://github.com/TrustBound/dream_opensearch/blob/2.0.0/test/snippets/doc_query_match_all.gleam#L3-L10"><img align="right" alt="Tested snippet" src="https://img.shields.io/badge/%F0%9F%A7%AA_tested-snippet-lightgreen.svg?style=flat-square"></a>
+/// ### Search all documents <a href="https://github.com/TrustBound/dream_opensearch/blob/3.0.0/test/snippets/doc_query_match_all.gleam#L3-L10"><img align="right" alt="Tested snippet" src="https://img.shields.io/badge/%F0%9F%A7%AA_tested-snippet-lightgreen.svg?style=flat-square"></a>
 ///
 /// ```gleam
 /// import dream_opensearch/client.{type Client}
@@ -117,7 +117,7 @@ pub fn match_all() -> String {
 ///
 /// ## Example
 ///
-/// ### Search for an exact value <a href="https://github.com/TrustBound/dream_opensearch/blob/2.0.0/test/snippets/doc_query_term.gleam#L3-L11"><img align="right" alt="Tested snippet" src="https://img.shields.io/badge/%F0%9F%A7%AA_tested-snippet-lightgreen.svg?style=flat-square"></a>
+/// ### Search for an exact value <a href="https://github.com/TrustBound/dream_opensearch/blob/3.0.0/test/snippets/doc_query_term.gleam#L3-L11"><img align="right" alt="Tested snippet" src="https://img.shields.io/badge/%F0%9F%A7%AA_tested-snippet-lightgreen.svg?style=flat-square"></a>
 ///
 /// ```gleam
 /// import dream_opensearch/client.{type Client}
@@ -165,7 +165,7 @@ pub fn term(field: String, value: String) -> String {
 ///
 /// ## Example
 ///
-/// ### Search a range <a href="https://github.com/TrustBound/dream_opensearch/blob/2.0.0/test/snippets/doc_query_range.gleam#L3-L11"><img align="right" alt="Tested snippet" src="https://img.shields.io/badge/%F0%9F%A7%AA_tested-snippet-lightgreen.svg?style=flat-square"></a>
+/// ### Search a range <a href="https://github.com/TrustBound/dream_opensearch/blob/3.0.0/test/snippets/doc_query_range.gleam#L3-L11"><img align="right" alt="Tested snippet" src="https://img.shields.io/badge/%F0%9F%A7%AA_tested-snippet-lightgreen.svg?style=flat-square"></a>
 ///
 /// ```gleam
 /// import dream_opensearch/client.{type Client}
@@ -223,7 +223,7 @@ pub fn range(field: String, gte: String, lte: String) -> String {
 ///
 /// ## Example
 ///
-/// ### Search the text of a field <a href="https://github.com/TrustBound/dream_opensearch/blob/2.0.0/test/snippets/doc_query_match.gleam#L3-L11"><img align="right" alt="Tested snippet" src="https://img.shields.io/badge/%F0%9F%A7%AA_tested-snippet-lightgreen.svg?style=flat-square"></a>
+/// ### Search the text of a field <a href="https://github.com/TrustBound/dream_opensearch/blob/3.0.0/test/snippets/doc_query_match.gleam#L3-L11"><img align="right" alt="Tested snippet" src="https://img.shields.io/badge/%F0%9F%A7%AA_tested-snippet-lightgreen.svg?style=flat-square"></a>
 ///
 /// ```gleam
 /// import dream_opensearch/client.{type Client}

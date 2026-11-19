@@ -49,7 +49,7 @@ A standalone HTTP client for interacting with OpenSearch (or Elasticsearch) clus
 gleam add dream_opensearch
 ```
 
-## Quick Start <a href="https://github.com/TrustBound/dream_opensearch/blob/2.0.0/test/snippets/readme_quick_start.gleam#L5-L34"><img align="right" alt="Tested snippet" src="https://img.shields.io/badge/%F0%9F%A7%AA_tested-snippet-lightgreen.svg?style=flat-square"></a>
+## Quick Start <a href="https://github.com/TrustBound/dream_opensearch/blob/3.0.0/test/snippets/readme_quick_start.gleam#L5-L34"><img align="right" alt="Tested snippet" src="https://img.shields.io/badge/%F0%9F%A7%AA_tested-snippet-lightgreen.svg?style=flat-square"></a>
 
 ```gleam
 import dream_opensearch/client.{type Client}
@@ -86,7 +86,7 @@ pub fn delete_alice(opensearch: Client) -> Result(String, String) {
 
 ## Usage
 
-### Client Setup <a href="https://github.com/TrustBound/dream_opensearch/blob/2.0.0/test/snippets/readme_client_setup.gleam#L6-L17"><img align="right" alt="Tested snippet" src="https://img.shields.io/badge/%F0%9F%A7%AA_tested-snippet-lightgreen.svg?style=flat-square"></a>
+### Client Setup <a href="https://github.com/TrustBound/dream_opensearch/blob/3.0.0/test/snippets/readme_client_setup.gleam#L6-L17"><img align="right" alt="Tested snippet" src="https://img.shields.io/badge/%F0%9F%A7%AA_tested-snippet-lightgreen.svg?style=flat-square"></a>
 
 ```gleam
 import dream_opensearch/client.{type Client}
@@ -105,7 +105,7 @@ pub fn create_client_with_credentials() -> Client {
 
 When the URL has a user name and password, the client sends them on every request in an `authorization: Basic ...` header. It does not send them in the request line or the `host` header. Percent-encode special characters in the user name or password (for example `@` as `%40`, `:` as `%3A`, `/` as `%2F`): the client decodes them before it encodes the header. A URL with a user name and no password sends an empty password.
 
-### Indexing Documents <a href="https://github.com/TrustBound/dream_opensearch/blob/2.0.0/test/snippets/readme_indexing_documents.gleam#L5-L21"><img align="right" alt="Tested snippet" src="https://img.shields.io/badge/%F0%9F%A7%AA_tested-snippet-lightgreen.svg?style=flat-square"></a>
+### Indexing Documents <a href="https://github.com/TrustBound/dream_opensearch/blob/3.0.0/test/snippets/readme_indexing_documents.gleam#L5-L21"><img align="right" alt="Tested snippet" src="https://img.shields.io/badge/%F0%9F%A7%AA_tested-snippet-lightgreen.svg?style=flat-square"></a>
 
 ```gleam
 import dream_opensearch/client.{type Client}
@@ -131,7 +131,7 @@ pub fn index_user(opensearch: Client) -> String {
 
 Use query builders for common queries:
 
-#### Search with each query builder <a href="https://github.com/TrustBound/dream_opensearch/blob/2.0.0/test/snippets/readme_searching.gleam#L5-L31"><img align="right" alt="Tested snippet" src="https://img.shields.io/badge/%F0%9F%A7%AA_tested-snippet-lightgreen.svg?style=flat-square"></a>
+#### Search with each query builder <a href="https://github.com/TrustBound/dream_opensearch/blob/3.0.0/test/snippets/readme_searching.gleam#L5-L31"><img align="right" alt="Tested snippet" src="https://img.shields.io/badge/%F0%9F%A7%AA_tested-snippet-lightgreen.svg?style=flat-square"></a>
 
 ```gleam
 import dream_opensearch/client.{type Client}
@@ -167,7 +167,7 @@ pub fn search_all(opensearch: Client) -> Result(String, String) {
 
 For complex queries, build JSON manually:
 
-#### Search with a bool query <a href="https://github.com/TrustBound/dream_opensearch/blob/2.0.0/test/snippets/readme_custom_queries.gleam#L5-L43"><img align="right" alt="Tested snippet" src="https://img.shields.io/badge/%F0%9F%A7%AA_tested-snippet-lightgreen.svg?style=flat-square"></a>
+#### Search with a bool query <a href="https://github.com/TrustBound/dream_opensearch/blob/3.0.0/test/snippets/readme_custom_queries.gleam#L5-L43"><img align="right" alt="Tested snippet" src="https://img.shields.io/badge/%F0%9F%A7%AA_tested-snippet-lightgreen.svg?style=flat-square"></a>
 
 ```gleam
 import dream_opensearch/client.{type Client}
@@ -211,7 +211,7 @@ pub fn search_active_users_named_alice(
 }
 ```
 
-### Index Management <a href="https://github.com/TrustBound/dream_opensearch/blob/2.0.0/test/snippets/readme_index_management.gleam#L5-L32"><img align="right" alt="Tested snippet" src="https://img.shields.io/badge/%F0%9F%A7%AA_tested-snippet-lightgreen.svg?style=flat-square"></a>
+### Index Management <a href="https://github.com/TrustBound/dream_opensearch/blob/3.0.0/test/snippets/readme_index_management.gleam#L5-L32"><img align="right" alt="Tested snippet" src="https://img.shields.io/badge/%F0%9F%A7%AA_tested-snippet-lightgreen.svg?style=flat-square"></a>
 
 ```gleam
 import dream_opensearch/client.{type Client}
@@ -244,7 +244,7 @@ pub fn delete_old_index(opensearch: Client) -> Result(String, String) {
 }
 ```
 
-### Bulk Operations <a href="https://github.com/TrustBound/dream_opensearch/blob/2.0.0/test/snippets/readme_bulk_operations.gleam#L5-L17"><img align="right" alt="Tested snippet" src="https://img.shields.io/badge/%F0%9F%A7%AA_tested-snippet-lightgreen.svg?style=flat-square"></a>
+### Bulk Operations <a href="https://github.com/TrustBound/dream_opensearch/blob/3.0.0/test/snippets/readme_bulk_operations.gleam#L5-L17"><img align="right" alt="Tested snippet" src="https://img.shields.io/badge/%F0%9F%A7%AA_tested-snippet-lightgreen.svg?style=flat-square"></a>
 
 ```gleam
 import dream_opensearch/client.{type Client}

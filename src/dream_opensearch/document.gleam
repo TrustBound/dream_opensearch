@@ -5,7 +5,7 @@
 ////
 //// ## Quick Start
 ////
-//// ### Create a client and index a document <a href="https://github.com/TrustBound/dream_opensearch/blob/2.0.0/test/snippets/doc_document_quick_start.gleam#L3-L18"><img align="right" alt="Tested snippet" src="https://img.shields.io/badge/%F0%9F%A7%AA_tested-snippet-lightgreen.svg?style=flat-square"></a>
+//// ### Create a client and index a document <a href="https://github.com/TrustBound/dream_opensearch/blob/3.0.0/test/snippets/doc_document_quick_start.gleam#L3-L18"><img align="right" alt="Tested snippet" src="https://img.shields.io/badge/%F0%9F%A7%AA_tested-snippet-lightgreen.svg?style=flat-square"></a>
 ////
 //// ```gleam
 //// import dream_opensearch/client.{type Client}
@@ -65,7 +65,7 @@ import gleam/http
 ///
 /// ## Example
 ///
-/// ### Index a document <a href="https://github.com/TrustBound/dream_opensearch/blob/2.0.0/test/snippets/doc_document_index.gleam#L3-L18"><img align="right" alt="Tested snippet" src="https://img.shields.io/badge/%F0%9F%A7%AA_tested-snippet-lightgreen.svg?style=flat-square"></a>
+/// ### Index a document <a href="https://github.com/TrustBound/dream_opensearch/blob/3.0.0/test/snippets/doc_document_index.gleam#L3-L18"><img align="right" alt="Tested snippet" src="https://img.shields.io/badge/%F0%9F%A7%AA_tested-snippet-lightgreen.svg?style=flat-square"></a>
 ///
 /// ```gleam
 /// import dream_opensearch/client.{type Client}
@@ -125,7 +125,7 @@ pub fn index(
 ///
 /// ## Example
 ///
-/// ### Search an index <a href="https://github.com/TrustBound/dream_opensearch/blob/2.0.0/test/snippets/doc_document_search.gleam#L3-L10"><img align="right" alt="Tested snippet" src="https://img.shields.io/badge/%F0%9F%A7%AA_tested-snippet-lightgreen.svg?style=flat-square"></a>
+/// ### Search an index <a href="https://github.com/TrustBound/dream_opensearch/blob/3.0.0/test/snippets/doc_document_search.gleam#L3-L10"><img align="right" alt="Tested snippet" src="https://img.shields.io/badge/%F0%9F%A7%AA_tested-snippet-lightgreen.svg?style=flat-square"></a>
 ///
 /// ```gleam
 /// import dream_opensearch/client.{type Client}
@@ -174,7 +174,7 @@ pub fn search(
 ///
 /// ## Example
 ///
-/// ### Delete a document <a href="https://github.com/TrustBound/dream_opensearch/blob/2.0.0/test/snippets/doc_document_delete.gleam#L3-L11"><img align="right" alt="Tested snippet" src="https://img.shields.io/badge/%F0%9F%A7%AA_tested-snippet-lightgreen.svg?style=flat-square"></a>
+/// ### Delete a document <a href="https://github.com/TrustBound/dream_opensearch/blob/3.0.0/test/snippets/doc_document_delete.gleam#L3-L11"><img align="right" alt="Tested snippet" src="https://img.shields.io/badge/%F0%9F%A7%AA_tested-snippet-lightgreen.svg?style=flat-square"></a>
 ///
 /// ```gleam
 /// import dream_opensearch/client.{type Client}
@@ -225,7 +225,7 @@ pub fn delete(
 ///
 /// ## Example
 ///
-/// ### Create an index with a mapping <a href="https://github.com/TrustBound/dream_opensearch/blob/2.0.0/test/snippets/doc_document_create_index.gleam#L3-L24"><img align="right" alt="Tested snippet" src="https://img.shields.io/badge/%F0%9F%A7%AA_tested-snippet-lightgreen.svg?style=flat-square"></a>
+/// ### Create an index with a mapping <a href="https://github.com/TrustBound/dream_opensearch/blob/3.0.0/test/snippets/doc_document_create_index.gleam#L3-L24"><img align="right" alt="Tested snippet" src="https://img.shields.io/badge/%F0%9F%A7%AA_tested-snippet-lightgreen.svg?style=flat-square"></a>
 ///
 /// ```gleam
 /// import dream_opensearch/client.{type Client}
@@ -288,7 +288,7 @@ pub fn create_index(
 ///
 /// ## Example
 ///
-/// ### Delete an index <a href="https://github.com/TrustBound/dream_opensearch/blob/2.0.0/test/snippets/doc_document_delete_index.gleam#L3-L11"><img align="right" alt="Tested snippet" src="https://img.shields.io/badge/%F0%9F%A7%AA_tested-snippet-lightgreen.svg?style=flat-square"></a>
+/// ### Delete an index <a href="https://github.com/TrustBound/dream_opensearch/blob/3.0.0/test/snippets/doc_document_delete_index.gleam#L3-L11"><img align="right" alt="Tested snippet" src="https://img.shields.io/badge/%F0%9F%A7%AA_tested-snippet-lightgreen.svg?style=flat-square"></a>
 ///
 /// ```gleam
 /// import dream_opensearch/client.{type Client}
@@ -337,7 +337,7 @@ pub fn delete_index(
 ///
 /// ## Example
 ///
-/// ### Index two documents in one request <a href="https://github.com/TrustBound/dream_opensearch/blob/2.0.0/test/snippets/doc_document_bulk.gleam#L3-L15"><img align="right" alt="Tested snippet" src="https://img.shields.io/badge/%F0%9F%A7%AA_tested-snippet-lightgreen.svg?style=flat-square"></a>
+/// ### Index two documents in one request <a href="https://github.com/TrustBound/dream_opensearch/blob/3.0.0/test/snippets/doc_document_bulk.gleam#L3-L15"><img align="right" alt="Tested snippet" src="https://img.shields.io/badge/%F0%9F%A7%AA_tested-snippet-lightgreen.svg?style=flat-square"></a>
 ///
 /// ```gleam
 /// import dream_opensearch/client.{type Client}
