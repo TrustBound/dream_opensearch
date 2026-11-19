@@ -1,14 +1,36 @@
 <div align="center">
-  <img src="https://raw.githubusercontent.com/TrustBound/dream/main/ricky_and_lucy.png" alt="Dream Logo" width="200">
-  
+  <img src="https://raw.githubusercontent.com/TrustBound/dream/main/ricky_and_lucy.png" alt="Ricky Moony and Lucy, a moon shaped mascot for Dream with the star shaped mascot for Gleam, each with cute cartoon eyes and a smile" width="200">
+
+<b>Simple OpenSearch client for Gleam</b>
+
+</div>
+
+<br />
+
+<div align="center">
+  <a href="https://hex.pm/packages/dream_opensearch">
+    <img src="https://img.shields.io/hexpm/v/dream_opensearch" alt="Hex Package">
+  </a>
+  <a href="https://github.com/TrustBound/dream_opensearch/releases">
+    <img src="https://img.shields.io/github/v/release/TrustBound/dream_opensearch?label=Release" alt="Latest Release">
+  </a>
   <a href="https://hexdocs.pm/dream_opensearch">
     <img src="https://img.shields.io/badge/hex-docs-lightgreen.svg" alt="HexDocs">
   </a>
+  <a href="https://github.com/TrustBound/dream_opensearch/actions/workflows/ci.yml?query=branch%3Amain">
+    <img src="https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/TrustBound/dream_opensearch/badges/coverage.json" alt="Coverage">
+  </a>
+  <a href="https://github.com/TrustBound/dream_opensearch/blob/main/LICENSE.md">
+    <img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="MIT License">
+  </a>
+  <a href="https://gleam.run">
+    <img src="https://img.shields.io/badge/gleam-%E2%9C%A8-ffaff3" alt="Gleam">
+  </a>
 </div>
 
-# dream_opensearch
+<br />
 
-**Simple OpenSearch client for Gleam.**
+# dream_opensearch
 
 A standalone HTTP client for interacting with OpenSearch (or Elasticsearch) clusters. Provides clean interfaces for indexing, searching, and managing documents. Built with the same quality standards as [Dream](https://github.com/TrustBound/dream), but completely independent—use it in any Gleam project.
 
@@ -27,7 +49,7 @@ A standalone HTTP client for interacting with OpenSearch (or Elasticsearch) clus
 gleam add dream_opensearch
 ```
 
-## Quick Start <a href="https://github.com/TrustBound/dream/blob/dream_opensearch-2.0.0/modules/opensearch/test/snippets/readme_quick_start.gleam"><img align="right" alt="Tested snippet" src="https://img.shields.io/badge/%F0%9F%A7%AA_tested-snippet-lightgreen.svg?style=flat-square"></a>
+## Quick Start <a href="https://github.com/TrustBound/dream_opensearch/blob/3.0.0/test/snippets/readme_quick_start.gleam#L5-L34"><img align="right" alt="Tested snippet" src="https://img.shields.io/badge/%F0%9F%A7%AA_tested-snippet-lightgreen.svg?style=flat-square"></a>
 
 ```gleam
 import dream_opensearch/client.{type Client}
@@ -64,7 +86,7 @@ pub fn delete_alice(opensearch: Client) -> Result(String, String) {
 
 ## Usage
 
-### Client Setup <a href="https://github.com/TrustBound/dream/blob/dream_opensearch-2.0.0/modules/opensearch/test/snippets/readme_client_setup.gleam"><img align="right" alt="Tested snippet" src="https://img.shields.io/badge/%F0%9F%A7%AA_tested-snippet-lightgreen.svg?style=flat-square"></a>
+### Client Setup <a href="https://github.com/TrustBound/dream_opensearch/blob/3.0.0/test/snippets/readme_client_setup.gleam#L6-L17"><img align="right" alt="Tested snippet" src="https://img.shields.io/badge/%F0%9F%A7%AA_tested-snippet-lightgreen.svg?style=flat-square"></a>
 
 ```gleam
 import dream_opensearch/client.{type Client}
@@ -83,7 +105,7 @@ pub fn create_client_with_credentials() -> Client {
 
 When the URL has a user name and password, the client sends them on every request in an `authorization: Basic ...` header. It does not send them in the request line or the `host` header. Percent-encode special characters in the user name or password (for example `@` as `%40`, `:` as `%3A`, `/` as `%2F`): the client decodes them before it encodes the header. A URL with a user name and no password sends an empty password.
 
-### Indexing Documents <a href="https://github.com/TrustBound/dream/blob/dream_opensearch-2.0.0/modules/opensearch/test/snippets/readme_indexing_documents.gleam"><img align="right" alt="Tested snippet" src="https://img.shields.io/badge/%F0%9F%A7%AA_tested-snippet-lightgreen.svg?style=flat-square"></a>
+### Indexing Documents <a href="https://github.com/TrustBound/dream_opensearch/blob/3.0.0/test/snippets/readme_indexing_documents.gleam#L5-L21"><img align="right" alt="Tested snippet" src="https://img.shields.io/badge/%F0%9F%A7%AA_tested-snippet-lightgreen.svg?style=flat-square"></a>
 
 ```gleam
 import dream_opensearch/client.{type Client}
@@ -109,7 +131,7 @@ pub fn index_user(opensearch: Client) -> String {
 
 Use query builders for common queries:
 
-#### Search with each query builder <a href="https://github.com/TrustBound/dream/blob/dream_opensearch-2.0.0/modules/opensearch/test/snippets/readme_searching.gleam"><img align="right" alt="Tested snippet" src="https://img.shields.io/badge/%F0%9F%A7%AA_tested-snippet-lightgreen.svg?style=flat-square"></a>
+#### Search with each query builder <a href="https://github.com/TrustBound/dream_opensearch/blob/3.0.0/test/snippets/readme_searching.gleam#L5-L31"><img align="right" alt="Tested snippet" src="https://img.shields.io/badge/%F0%9F%A7%AA_tested-snippet-lightgreen.svg?style=flat-square"></a>
 
 ```gleam
 import dream_opensearch/client.{type Client}
@@ -145,7 +167,7 @@ pub fn search_all(opensearch: Client) -> Result(String, String) {
 
 For complex queries, build JSON manually:
 
-#### Search with a bool query <a href="https://github.com/TrustBound/dream/blob/dream_opensearch-2.0.0/modules/opensearch/test/snippets/readme_custom_queries.gleam"><img align="right" alt="Tested snippet" src="https://img.shields.io/badge/%F0%9F%A7%AA_tested-snippet-lightgreen.svg?style=flat-square"></a>
+#### Search with a bool query <a href="https://github.com/TrustBound/dream_opensearch/blob/3.0.0/test/snippets/readme_custom_queries.gleam#L5-L43"><img align="right" alt="Tested snippet" src="https://img.shields.io/badge/%F0%9F%A7%AA_tested-snippet-lightgreen.svg?style=flat-square"></a>
 
 ```gleam
 import dream_opensearch/client.{type Client}
@@ -189,7 +211,7 @@ pub fn search_active_users_named_alice(
 }
 ```
 
-### Index Management <a href="https://github.com/TrustBound/dream/blob/dream_opensearch-2.0.0/modules/opensearch/test/snippets/readme_index_management.gleam"><img align="right" alt="Tested snippet" src="https://img.shields.io/badge/%F0%9F%A7%AA_tested-snippet-lightgreen.svg?style=flat-square"></a>
+### Index Management <a href="https://github.com/TrustBound/dream_opensearch/blob/3.0.0/test/snippets/readme_index_management.gleam#L5-L32"><img align="right" alt="Tested snippet" src="https://img.shields.io/badge/%F0%9F%A7%AA_tested-snippet-lightgreen.svg?style=flat-square"></a>
 
 ```gleam
 import dream_opensearch/client.{type Client}
@@ -222,7 +244,7 @@ pub fn delete_old_index(opensearch: Client) -> Result(String, String) {
 }
 ```
 
-### Bulk Operations <a href="https://github.com/TrustBound/dream/blob/dream_opensearch-2.0.0/modules/opensearch/test/snippets/readme_bulk_operations.gleam"><img align="right" alt="Tested snippet" src="https://img.shields.io/badge/%F0%9F%A7%AA_tested-snippet-lightgreen.svg?style=flat-square"></a>
+### Bulk Operations <a href="https://github.com/TrustBound/dream_opensearch/blob/3.0.0/test/snippets/readme_bulk_operations.gleam#L5-L17"><img align="right" alt="Tested snippet" src="https://img.shields.io/badge/%F0%9F%A7%AA_tested-snippet-lightgreen.svg?style=flat-square"></a>
 
 ```gleam
 import dream_opensearch/client.{type Client}
@@ -264,13 +286,7 @@ pub fn bulk_index_users(opensearch: Client) -> Result(String, String) {
 
 ## Design Principles
 
-This module follows the same quality standards as [Dream](https://github.com/TrustBound/dream):
-
-- **No nested cases** - Clear, flat control flow
-- **No anonymous functions** - Named functions for clarity
-- **Builder pattern** - Consistent, composable APIs
-- **Type safety** - `Result` types force error handling
-- **Quality testing** - Comprehensive test coverage
+dream_opensearch follows Dream's [design principles](https://github.com/TrustBound/dream/blob/release/3.0.0/docs/reference/design-principles.md) and [contributing guide](https://github.com/TrustBound/dream/blob/release/3.0.0/docs/contributing/contributing.md).
 
 ## About Dream
 
@@ -278,4 +294,10 @@ This module was originally built for the [Dream](https://github.com/TrustBound/d
 
 ## License
 
-MIT License - see LICENSE file for details.
+MIT — see [LICENSE.md](https://github.com/TrustBound/dream_opensearch/blob/main/LICENSE.md)
+
+---
+
+<div align="center">
+  <sub>Built in Gleam, on the BEAM, by the <a href="https://github.com/trustbound/dream">Dream Team</a> ❤️</sub>
+</div>

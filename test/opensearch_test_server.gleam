@@ -61,3 +61,22 @@ pub fn request_line(request: CapturedRequest) -> #(String, String) {
 pub fn header_values(request: CapturedRequest, name: String) -> List(String) {
   list.key_filter(request.headers, name)
 }
+
+/// The body of the captured request.
+pub fn request_body(request: CapturedRequest) -> String {
+  request.body
+}
+
+/// Method, request target and body, e.g.
+/// `#("POST", "/users/_search", "{}")`.
+pub fn request_line_and_body(
+  request: CapturedRequest,
+) -> #(String, String, String) {
+  #(request.method, request.target, request.body)
+}
+
+/// `http://<userinfo>@127.0.0.1:<port>` for this server, e.g. with
+/// `userinfo` set to `user:pass`.
+pub fn base_url_with_userinfo(server: TestServer, userinfo: String) -> String {
+  "http://" <> userinfo <> "@127.0.0.1:" <> int.to_string(port(server))
+}

@@ -6,14 +6,19 @@
 ////
 //// ## Quick Start
 ////
+//// ### Create a client and index a document <a href="https://github.com/TrustBound/dream_opensearch/blob/3.0.0/test/snippets/doc_client_quick_start.gleam#L3-L12"><img align="right" alt="Tested snippet" src="https://img.shields.io/badge/%F0%9F%A7%AA_tested-snippet-lightgreen.svg?style=flat-square"></a>
+////
 //// ```gleam
-//// import dream_opensearch/client
+//// import dream_opensearch/client.{type Client}
 //// import dream_opensearch/document
 ////
-//// let client = client.new("http://localhost:9200")
+//// pub fn create_client() -> Client {
+////   client.new("http://localhost:9200")
+//// }
 ////
-//// // Index a document
-//// document.index(client, "users", "123", json_body)
+//// pub fn index_alice(opensearch: Client) -> Result(String, String) {
+////   document.index(opensearch, "users", "123", "{\"name\":\"Alice\"}")
+//// }
 //// ```
 ////
 //// ## Base URL
@@ -49,6 +54,8 @@ import gleam/uri
 ///   slash), as given to `new`. It keeps any user name and password; do not
 ///   print or log it.
 pub type Client {
+  /// A client for the cluster at `base_url`. Build it with `new`, which
+  /// removes a trailing slash.
   Client(base_url: String)
 }
 
@@ -71,14 +78,24 @@ pub type Client {
 ///
 /// A new `Client` configured for the specified cluster.
 ///
+/// ## See Also
+///
+/// - `send_request`: sends a request to the cluster of this client.
+///
 /// ## Example
 ///
-/// ```gleam
-/// import dream_opensearch/client
+/// ### Create a client <a href="https://github.com/TrustBound/dream_opensearch/blob/3.0.0/test/snippets/doc_client_new.gleam#L3-L11"><img align="right" alt="Tested snippet" src="https://img.shields.io/badge/%F0%9F%A7%AA_tested-snippet-lightgreen.svg?style=flat-square"></a>
 ///
-/// let client = client.new("http://localhost:9200")
-/// // Or with authentication
-/// let client = client.new("https://user:pass@search.example.com:9200")
+/// ```gleam
+/// import dream_opensearch/client.{type Client}
+///
+/// pub fn create_local_client() -> Client {
+///   client.new("http://localhost:9200")
+/// }
+///
+/// pub fn create_client_with_credentials() -> Client {
+///   client.new("https://user:pass@search.example.com:9200")
+/// }
 /// ```
 pub fn new(base_url: String) -> Client {
   let trimmed = case string.ends_with(base_url, "/") {
@@ -90,9 +107,9 @@ pub fn new(base_url: String) -> Client {
 
 /// Send HTTP request to OpenSearch
 ///
-/// Sends a raw HTTP request to the OpenSearch cluster. This is used internally
-/// by the document and query modules. Most applications should use those
-/// higher-level modules instead.
+/// Sends a raw HTTP request to the OpenSearch cluster. The
+/// `dream_opensearch/document` module uses it for every operation. Most
+/// applications should use that module instead.
 ///
 /// The request automatically includes the `Content-Type: application/json` header.
 ///
@@ -113,23 +130,39 @@ pub fn new(base_url: String) -> Client {
 /// ## Returns
 ///
 /// - `Ok(String)`: The response body as a string (status < 400)
-/// - `Error(String)`: The error response body (status >= 400), an error
-///   message for connection failures, or an error message when the URL cannot
-///   be parsed, has no host, or has invalid percent-encoding in the user name
-///   or password. No error message contains the user name or password.
+/// - `Error(String)`: See Errors.
+///
+/// ## Errors
+///
+/// - The response status is 400 or more: the response body, unchanged.
+/// - The connection fails: `Connection failed: <reason>`, for example
+///   `Connection failed: Connection refused`.
+/// - The URL cannot be parsed:
+///   `Invalid OpenSearch URL: the URL cannot be parsed`. No request is sent.
+/// - The URL has no host: `Invalid OpenSearch URL: the URL has no host`. No
+///   request is sent.
+/// - The user name or password has invalid percent-encoding:
+///   `Invalid credentials in the OpenSearch URL: the user name or password has invalid percent-encoding`.
+///   No request is sent.
+///
+/// No error message contains the user name or password.
+///
+/// ## See Also
+///
+/// - `new`: creates the client.
+/// - `dream_opensearch/document`: the operations built on this function.
 ///
 /// ## Example
 ///
+/// ### Get a document <a href="https://github.com/TrustBound/dream_opensearch/blob/3.0.0/test/snippets/doc_client_send_request.gleam#L3-L8"><img align="right" alt="Tested snippet" src="https://img.shields.io/badge/%F0%9F%A7%AA_tested-snippet-lightgreen.svg?style=flat-square"></a>
+///
 /// ```gleam
-/// import dream_opensearch/client
+/// import dream_opensearch/client.{type Client}
 /// import gleam/http
 ///
-/// let result = client.send_request(
-///   client,
-///   http.Get,
-///   "/users/_doc/123",
-///   ""
-/// )
+/// pub fn get_user(opensearch: Client) -> Result(String, String) {
+///   client.send_request(opensearch, http.Get, "/users/_doc/123", "")
+/// }
 /// ```
 pub fn send_request(
   client: Client,

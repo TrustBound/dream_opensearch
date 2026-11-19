@@ -5,19 +5,25 @@
 ////
 //// ## Quick Start
 ////
+//// ### Create a client and index a document <a href="https://github.com/TrustBound/dream_opensearch/blob/3.0.0/test/snippets/doc_document_quick_start.gleam#L3-L18"><img align="right" alt="Tested snippet" src="https://img.shields.io/badge/%F0%9F%A7%AA_tested-snippet-lightgreen.svg?style=flat-square"></a>
+////
 //// ```gleam
-//// import dream_opensearch/client
+//// import dream_opensearch/client.{type Client}
 //// import dream_opensearch/document
 //// import gleam/json
 ////
-//// let client = client.new("http://localhost:9200")
+//// pub fn create_client() -> Client {
+////   client.new("http://localhost:9200")
+//// }
 ////
-//// // Index a document
-//// let doc = json.object([
-////   #("name", json.string("Alice")),
-////   #("email", json.string("alice@example.com")),
-//// ])
-//// document.index(client, "users", "123", json.to_string(doc))
+//// pub fn index_alice(opensearch: Client) -> Result(String, String) {
+////   let user =
+////     json.object([
+////       #("name", json.string("Alice")),
+////       #("email", json.string("alice@example.com")),
+////     ])
+////   document.index(opensearch, "users", "123", json.to_string(user))
+//// }
 //// ```
 ////
 //// ## JSON Format
@@ -45,20 +51,38 @@ import gleam/http
 /// - `Ok(String)`: The OpenSearch response as JSON string
 /// - `Error(String)`: An error message if the operation failed
 ///
+/// ## Errors
+///
+/// The errors of `client.send_request`: the response body when OpenSearch
+/// answers with status 400 or more (for example `mapper_parsing_exception`), or a message when the connection
+/// fails or the base URL cannot be used.
+///
+/// ## See Also
+///
+/// - `search`: finds the indexed documents.
+/// - `bulk`: indexes many documents in one request.
+/// - `delete`: deletes the document.
+///
 /// ## Example
 ///
+/// ### Index a document <a href="https://github.com/TrustBound/dream_opensearch/blob/3.0.0/test/snippets/doc_document_index.gleam#L3-L18"><img align="right" alt="Tested snippet" src="https://img.shields.io/badge/%F0%9F%A7%AA_tested-snippet-lightgreen.svg?style=flat-square"></a>
+///
 /// ```gleam
+/// import dream_opensearch/client.{type Client}
 /// import dream_opensearch/document
 /// import gleam/json
 ///
-/// let doc = json.object([
-///   #("name", json.string("Alice")),
-///   #("email", json.string("alice@example.com")),
-/// ])
+/// pub fn index_alice(opensearch: Client) -> String {
+///   let user =
+///     json.object([
+///       #("name", json.string("Alice")),
+///       #("email", json.string("alice@example.com")),
+///     ])
 ///
-/// case document.index(client, "users", "123", json.to_string(doc)) {
-///   Ok(response) -> io.println("Indexed successfully")
-///   Error(msg) -> io.println("Error: " <> msg)
+///   case document.index(opensearch, "users", "123", json.to_string(user)) {
+///     Ok(_response) -> "Indexed successfully"
+///     Error(message) -> "Error: " <> message
+///   }
 /// }
 /// ```
 pub fn index(
@@ -88,16 +112,29 @@ pub fn index(
 /// - `Ok(String)`: The search results as JSON string
 /// - `Error(String)`: An error message if the search failed
 ///
+/// ## Errors
+///
+/// The errors of `client.send_request`: the response body when OpenSearch
+/// answers with status 400 or more (for example `index_not_found_exception`), or a message when the connection
+/// fails or the base URL cannot be used.
+///
+/// ## See Also
+///
+/// - `dream_opensearch/query`: builds the query JSON.
+/// - `index`: adds documents to search.
+///
 /// ## Example
 ///
+/// ### Search an index <a href="https://github.com/TrustBound/dream_opensearch/blob/3.0.0/test/snippets/doc_document_search.gleam#L3-L10"><img align="right" alt="Tested snippet" src="https://img.shields.io/badge/%F0%9F%A7%AA_tested-snippet-lightgreen.svg?style=flat-square"></a>
+///
 /// ```gleam
+/// import dream_opensearch/client.{type Client}
 /// import dream_opensearch/document
 /// import dream_opensearch/query
 ///
-/// let query = query.match("name", "Alice")
-/// case document.search(client, "users", query) {
-///   Ok(results) -> process_results(results)
-///   Error(msg) -> handle_error(msg)
+/// pub fn search_for_alice(opensearch: Client) -> Result(String, String) {
+///   let name_query = query.match("name", "Alice")
+///   document.search(opensearch, "users", name_query)
 /// }
 /// ```
 pub fn search(
@@ -124,14 +161,30 @@ pub fn search(
 /// - `Ok(String)`: The OpenSearch response as JSON string
 /// - `Error(String)`: An error message if the deletion failed
 ///
+/// ## Errors
+///
+/// The errors of `client.send_request`: the response body when OpenSearch
+/// answers with status 400 or more (for example status 404 when the document does not exist), or a message when the connection
+/// fails or the base URL cannot be used.
+///
+/// ## See Also
+///
+/// - `index`: adds or replaces a document.
+/// - `delete_index`: deletes the whole index.
+///
 /// ## Example
 ///
+/// ### Delete a document <a href="https://github.com/TrustBound/dream_opensearch/blob/3.0.0/test/snippets/doc_document_delete.gleam#L3-L11"><img align="right" alt="Tested snippet" src="https://img.shields.io/badge/%F0%9F%A7%AA_tested-snippet-lightgreen.svg?style=flat-square"></a>
+///
 /// ```gleam
+/// import dream_opensearch/client.{type Client}
 /// import dream_opensearch/document
 ///
-/// case document.delete(client, "users", "123") {
-///   Ok(_) -> io.println("Document deleted")
-///   Error(msg) -> io.println("Error: " <> msg)
+/// pub fn delete_user(opensearch: Client) -> String {
+///   case document.delete(opensearch, "users", "123") {
+///     Ok(_response) -> "Document deleted"
+///     Error(message) -> "Error: " <> message
+///   }
 /// }
 /// ```
 pub fn delete(
@@ -159,22 +212,44 @@ pub fn delete(
 /// - `Ok(String)`: The OpenSearch response as JSON string
 /// - `Error(String)`: An error message if creation failed (e.g., index already exists)
 ///
+/// ## Errors
+///
+/// The errors of `client.send_request`: the response body when OpenSearch
+/// answers with status 400 or more (for example `resource_already_exists_exception`), or a message when the connection
+/// fails or the base URL cannot be used.
+///
+/// ## See Also
+///
+/// - `delete_index`: deletes the index.
+/// - `index`: adds documents to the index.
+///
 /// ## Example
 ///
+/// ### Create an index with a mapping <a href="https://github.com/TrustBound/dream_opensearch/blob/3.0.0/test/snippets/doc_document_create_index.gleam#L3-L24"><img align="right" alt="Tested snippet" src="https://img.shields.io/badge/%F0%9F%A7%AA_tested-snippet-lightgreen.svg?style=flat-square"></a>
+///
 /// ```gleam
+/// import dream_opensearch/client.{type Client}
 /// import dream_opensearch/document
 /// import gleam/json
 ///
-/// let mapping = json.object([
-///   #("mappings", json.object([
-///     #("properties", json.object([
-///       #("name", json.object([#("type", json.string("text"))])),
-///       #("email", json.object([#("type", json.string("keyword"))])),
-///     ])),
-///   ])),
-/// ])
-///
-/// document.create_index(client, "users", json.to_string(mapping))
+/// pub fn create_users_index(opensearch: Client) -> Result(String, String) {
+///   let mapping =
+///     json.object([
+///       #(
+///         "mappings",
+///         json.object([
+///           #(
+///             "properties",
+///             json.object([
+///               #("name", json.object([#("type", json.string("text"))])),
+///               #("email", json.object([#("type", json.string("keyword"))])),
+///             ]),
+///           ),
+///         ]),
+///       ),
+///     ])
+///   document.create_index(opensearch, "users", json.to_string(mapping))
+/// }
 /// ```
 pub fn create_index(
   client: Client,
@@ -200,14 +275,30 @@ pub fn create_index(
 /// - `Ok(String)`: The OpenSearch response as JSON string
 /// - `Error(String)`: An error message if deletion failed (e.g., index doesn't exist)
 ///
+/// ## Errors
+///
+/// The errors of `client.send_request`: the response body when OpenSearch
+/// answers with status 400 or more (for example `index_not_found_exception`), or a message when the connection
+/// fails or the base URL cannot be used.
+///
+/// ## See Also
+///
+/// - `create_index`: creates an index.
+/// - `delete`: deletes one document.
+///
 /// ## Example
 ///
+/// ### Delete an index <a href="https://github.com/TrustBound/dream_opensearch/blob/3.0.0/test/snippets/doc_document_delete_index.gleam#L3-L11"><img align="right" alt="Tested snippet" src="https://img.shields.io/badge/%F0%9F%A7%AA_tested-snippet-lightgreen.svg?style=flat-square"></a>
+///
 /// ```gleam
+/// import dream_opensearch/client.{type Client}
 /// import dream_opensearch/document
 ///
-/// case document.delete_index(client, "old_index") {
-///   Ok(_) -> io.println("Index deleted")
-///   Error(msg) -> io.println("Error: " <> msg)
+/// pub fn delete_old_index(opensearch: Client) -> String {
+///   case document.delete_index(opensearch, "old_index") {
+///     Ok(_response) -> "Index deleted"
+///     Error(message) -> "Error: " <> message
+///   }
 /// }
 /// ```
 pub fn delete_index(
@@ -234,18 +325,34 @@ pub fn delete_index(
 /// - `Ok(String)`: The OpenSearch response as JSON string
 /// - `Error(String)`: An error message if the bulk operation failed
 ///
+/// ## Errors
+///
+/// The errors of `client.send_request`: the response body when OpenSearch
+/// answers with status 400 or more, or a message when the connection
+/// fails or the base URL cannot be used.
+///
+/// ## See Also
+///
+/// - `index`: indexes one document.
+///
 /// ## Example
 ///
+/// ### Index two documents in one request <a href="https://github.com/TrustBound/dream_opensearch/blob/3.0.0/test/snippets/doc_document_bulk.gleam#L3-L15"><img align="right" alt="Tested snippet" src="https://img.shields.io/badge/%F0%9F%A7%AA_tested-snippet-lightgreen.svg?style=flat-square"></a>
+///
 /// ```gleam
+/// import dream_opensearch/client.{type Client}
 /// import dream_opensearch/document
 ///
-/// // NDJSON format: action and document on alternating lines
-/// let ndjson = "{ \"index\": { \"_index\": \"users\", \"_id\": \"1\" } }\n"
-///   <> "{ \"name\": \"Alice\", \"email\": \"alice@example.com\" }\n"
-///   <> "{ \"index\": { \"_index\": \"users\", \"_id\": \"2\" } }\n"
-///   <> "{ \"name\": \"Bob\", \"email\": \"bob@example.com\" }\n"
+/// pub fn bulk_index_users(opensearch: Client) -> Result(String, String) {
+///   // NDJSON format: action and document on alternating lines
+///   let ndjson =
+///     "{ \"index\": { \"_index\": \"users\", \"_id\": \"1\" } }\n"
+///     <> "{ \"name\": \"Alice\", \"email\": \"alice@example.com\" }\n"
+///     <> "{ \"index\": { \"_index\": \"users\", \"_id\": \"2\" } }\n"
+///     <> "{ \"name\": \"Bob\", \"email\": \"bob@example.com\" }\n"
 ///
-/// document.bulk(client, ndjson)
+///   document.bulk(opensearch, ndjson)
+/// }
 /// ```
 pub fn bulk(client: Client, ndjson: String) -> Result(String, String) {
   let path = "/_bulk"

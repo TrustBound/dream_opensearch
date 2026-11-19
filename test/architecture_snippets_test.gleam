@@ -4,58 +4,73 @@
 //// real OpenSearch.
 
 import dream_opensearch/client
-import gleeunit/should
+import dream_test/matchers.{be_equal, or_fail_with, should}
+import dream_test/types.{type TestSuite}
+import dream_test/unit.{describe, it}
+import gleam/result
 import opensearch_test_server.{Respond}
 import snippets/architecture_opensearch
 
-pub fn create_client_uses_localhost_9200_test() {
-  // Arrange
-  let opensearch = architecture_opensearch.create_client()
+pub fn tests() -> TestSuite(Nil) {
+  describe("architecture snippet", [
+    it("create client uses localhost 9200", fn() {
+      // Arrange
+      let opensearch = architecture_opensearch.create_client()
 
-  // Act
-  let base_url = opensearch.base_url
+      // Act
+      let base_url = opensearch.base_url
 
-  // Assert
-  base_url |> should.equal("http://localhost:9200")
-}
+      // Assert
+      base_url
+      |> should
+      |> be_equal("http://localhost:9200")
+      |> or_fail_with("create client uses localhost 9200")
+    }),
+    it("index log entry sends put to the document path", fn() {
+      // Arrange
+      let server = opensearch_test_server.start(Respond(201, "{}"))
+      let opensearch = client.new(opensearch_test_server.base_url(server))
 
-pub fn index_log_entry_sends_put_to_the_document_path_test() {
-  // Arrange
-  let server = opensearch_test_server.start(Respond(201, "{}"))
-  let opensearch = client.new(opensearch_test_server.base_url(server))
+      // Act
+      let _ = architecture_opensearch.index_log_entry(opensearch, "Started")
 
-  // Act
-  let _ = architecture_opensearch.index_log_entry(opensearch, "Started")
+      // Assert
+      opensearch_test_server.await_request(server)
+      |> result.map(opensearch_test_server.request_line)
+      |> should
+      |> be_equal(Ok(#("PUT", "/logs/_doc/doc-id-123")))
+      |> or_fail_with("index log entry sends put to the document path")
+    }),
+    it("index log entry sends the message as json", fn() {
+      // Arrange
+      let server = opensearch_test_server.start(Respond(201, "{}"))
+      let opensearch = client.new(opensearch_test_server.base_url(server))
 
-  // Assert
-  opensearch_test_server.await_request(server)
-  |> should.be_ok
-  |> opensearch_test_server.request_line
-  |> should.equal(#("PUT", "/logs/_doc/doc-id-123"))
-}
+      // Act
+      let _ = architecture_opensearch.index_log_entry(opensearch, "Started")
 
-pub fn index_log_entry_sends_the_message_as_json_test() {
-  // Arrange
-  let server = opensearch_test_server.start(Respond(201, "{}"))
-  let opensearch = client.new(opensearch_test_server.base_url(server))
+      // Assert
+      opensearch_test_server.await_request(server)
+      |> result.map(opensearch_test_server.request_body)
+      |> should
+      |> be_equal(Ok("{\"message\":\"Started\"}"))
+      |> or_fail_with("index log entry sends the message as json")
+    }),
+    it("index log entry returns the response body", fn() {
+      // Arrange
+      let server =
+        opensearch_test_server.start(Respond(201, "{\"result\":\"created\"}"))
+      let opensearch = client.new(opensearch_test_server.base_url(server))
 
-  // Act
-  let _ = architecture_opensearch.index_log_entry(opensearch, "Started")
+      // Act
+      let result =
+        architecture_opensearch.index_log_entry(opensearch, "Started")
 
-  // Assert
-  let request = opensearch_test_server.await_request(server) |> should.be_ok
-  request.body |> should.equal("{\"message\":\"Started\"}")
-}
-
-pub fn index_log_entry_returns_the_response_body_test() {
-  // Arrange
-  let server =
-    opensearch_test_server.start(Respond(201, "{\"result\":\"created\"}"))
-  let opensearch = client.new(opensearch_test_server.base_url(server))
-
-  // Act
-  let result = architecture_opensearch.index_log_entry(opensearch, "Started")
-
-  // Assert
-  result |> should.equal(Ok("{\"result\":\"created\"}"))
+      // Assert
+      result
+      |> should
+      |> be_equal(Ok("{\"result\":\"created\"}"))
+      |> or_fail_with("index log entry returns the response body")
+    }),
+  ])
 }

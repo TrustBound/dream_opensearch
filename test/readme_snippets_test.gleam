@@ -6,8 +6,11 @@
 //// it returns.
 
 import dream_opensearch/client
+import dream_test/matchers.{be_equal, or_fail_with, should}
+import dream_test/types.{type TestSuite}
+import dream_test/unit.{describe, group, it}
 import gleam/int
-import gleeunit/should
+import gleam/result
 import opensearch_test_server.{Respond}
 import snippets/readme_bulk_operations
 import snippets/readme_client_setup
@@ -17,317 +20,359 @@ import snippets/readme_indexing_documents
 import snippets/readme_quick_start
 import snippets/readme_searching
 
-// ============================================================================
-// Quick Start
-// ============================================================================
+pub fn tests() -> TestSuite(Nil) {
+  describe("README snippets", [
+    group("Quick Start", [
+      it("create client uses localhost 9200", fn() {
+        // Act
+        let opensearch = readme_quick_start.create_client()
 
-pub fn quick_start_create_client_uses_localhost_9200_test() {
-  // Act
-  let opensearch = readme_quick_start.create_client()
+        // Assert
+        opensearch.base_url
+        |> should
+        |> be_equal("http://localhost:9200")
+        |> or_fail_with("quick start create client uses localhost 9200")
+      }),
+      it("index alice sends put to the document path", fn() {
+        // Arrange
+        let server = opensearch_test_server.start(Respond(201, "{}"))
+        let opensearch = client.new(opensearch_test_server.base_url(server))
 
-  // Assert
-  opensearch.base_url |> should.equal("http://localhost:9200")
-}
+        // Act
+        let _ = readme_quick_start.index_alice(opensearch)
 
-pub fn quick_start_index_alice_sends_put_to_the_document_path_test() {
-  // Arrange
-  let server = opensearch_test_server.start(Respond(201, "{}"))
-  let opensearch = client.new(opensearch_test_server.base_url(server))
+        // Assert
+        opensearch_test_server.await_request(server)
+        |> result.map(opensearch_test_server.request_line)
+        |> should
+        |> be_equal(Ok(#("PUT", "/users/_doc/123")))
+        |> or_fail_with(
+          "quick start index alice sends put to the document path",
+        )
+      }),
+      it("index alice sends the user as json", fn() {
+        // Arrange
+        let server = opensearch_test_server.start(Respond(201, "{}"))
+        let opensearch = client.new(opensearch_test_server.base_url(server))
 
-  // Act
-  let _ = readme_quick_start.index_alice(opensearch)
+        // Act
+        let _ = readme_quick_start.index_alice(opensearch)
 
-  // Assert
-  opensearch_test_server.await_request(server)
-  |> should.be_ok
-  |> opensearch_test_server.request_line
-  |> should.equal(#("PUT", "/users/_doc/123"))
-}
+        // Assert
+        opensearch_test_server.await_request(server)
+        |> result.map(opensearch_test_server.request_body)
+        |> should
+        |> be_equal(Ok("{\"name\":\"Alice\",\"email\":\"alice@example.com\"}"))
+        |> or_fail_with("quick start index alice sends the user as json")
+      }),
+      it("search for alice sends a match query", fn() {
+        // Arrange
+        let server = opensearch_test_server.start(Respond(200, "{}"))
+        let opensearch = client.new(opensearch_test_server.base_url(server))
 
-pub fn quick_start_index_alice_sends_the_user_as_json_test() {
-  // Arrange
-  let server = opensearch_test_server.start(Respond(201, "{}"))
-  let opensearch = client.new(opensearch_test_server.base_url(server))
+        // Act
+        let _ = readme_quick_start.search_for_alice(opensearch)
 
-  // Act
-  let _ = readme_quick_start.index_alice(opensearch)
+        // Assert
+        opensearch_test_server.await_request(server)
+        |> result.map(opensearch_test_server.request_line_and_body)
+        |> should
+        |> be_equal(
+          Ok(#(
+            "POST",
+            "/users/_search",
+            "{\"query\":{\"match\":{\"name\":\"Alice\"}}}",
+          )),
+        )
+        |> or_fail_with("quick start search for alice sends a match query")
+      }),
+      it("search for alice returns the response body", fn() {
+        // Arrange
+        let server =
+          opensearch_test_server.start(Respond(200, "{\"hits\":{\"total\":1}}"))
+        let opensearch = client.new(opensearch_test_server.base_url(server))
 
-  // Assert
-  let request = opensearch_test_server.await_request(server) |> should.be_ok
-  request.body
-  |> should.equal("{\"name\":\"Alice\",\"email\":\"alice@example.com\"}")
-}
+        // Act
+        let result = readme_quick_start.search_for_alice(opensearch)
 
-pub fn quick_start_search_for_alice_sends_a_match_query_test() {
-  // Arrange
-  let server = opensearch_test_server.start(Respond(200, "{}"))
-  let opensearch = client.new(opensearch_test_server.base_url(server))
+        // Assert
+        result
+        |> should
+        |> be_equal(Ok("{\"hits\":{\"total\":1}}"))
+        |> or_fail_with(
+          "quick start search for alice returns the response body",
+        )
+      }),
+      it("delete alice sends delete to the document path", fn() {
+        // Arrange
+        let server = opensearch_test_server.start(Respond(200, "{}"))
+        let opensearch = client.new(opensearch_test_server.base_url(server))
 
-  // Act
-  let _ = readme_quick_start.search_for_alice(opensearch)
+        // Act
+        let _ = readme_quick_start.delete_alice(opensearch)
 
-  // Assert
-  let request = opensearch_test_server.await_request(server) |> should.be_ok
-  #(request.method, request.target, request.body)
-  |> should.equal(#(
-    "POST",
-    "/users/_search",
-    "{\"query\":{\"match\":{\"name\":\"Alice\"}}}",
-  ))
-}
+        // Assert
+        opensearch_test_server.await_request(server)
+        |> result.map(opensearch_test_server.request_line)
+        |> should
+        |> be_equal(Ok(#("DELETE", "/users/_doc/123")))
+        |> or_fail_with(
+          "quick start delete alice sends delete to the document path",
+        )
+      }),
+    ]),
+    group("Client Setup", [
+      it("create local client uses localhost 9200", fn() {
+        // Act
+        let opensearch = readme_client_setup.create_local_client()
 
-pub fn quick_start_search_for_alice_returns_the_response_body_test() {
-  // Arrange
-  let server =
-    opensearch_test_server.start(Respond(200, "{\"hits\":{\"total\":1}}"))
-  let opensearch = client.new(opensearch_test_server.base_url(server))
+        // Assert
+        opensearch.base_url
+        |> should
+        |> be_equal("http://localhost:9200")
+        |> or_fail_with("client setup create local client uses localhost 9200")
+      }),
+      it("create client with credentials keeps url", fn() {
+        // Act
+        let opensearch = readme_client_setup.create_client_with_credentials()
 
-  // Act
-  let result = readme_quick_start.search_for_alice(opensearch)
+        // Assert
+        opensearch.base_url
+        |> should
+        |> be_equal("https://user:pass@search.example.com:9200")
+        |> or_fail_with("client setup create client with credentials keeps url")
+      }),
+      it("credentials in url send basic authorization header", fn() {
+        // Arrange
+        let server = opensearch_test_server.start(Respond(200, "{}"))
+        let port = opensearch_test_server.port(server)
+        let opensearch =
+          client.new("http://user:pass@127.0.0.1:" <> int.to_string(port))
 
-  // Assert
-  result |> should.equal(Ok("{\"hits\":{\"total\":1}}"))
-}
+        // Act
+        let _ = readme_quick_start.search_for_alice(opensearch)
 
-pub fn quick_start_delete_alice_sends_delete_to_the_document_path_test() {
-  // Arrange
-  let server = opensearch_test_server.start(Respond(200, "{}"))
-  let opensearch = client.new(opensearch_test_server.base_url(server))
+        // Assert: base64 of "user:pass"
+        opensearch_test_server.await_request(server)
+        |> result.map(opensearch_test_server.header_values(_, "authorization"))
+        |> should
+        |> be_equal(Ok(["Basic dXNlcjpwYXNz"]))
+        |> or_fail_with(
+          "client setup credentials in url send basic authorization header",
+        )
+      }),
+    ]),
+    group("Indexing Documents", [
+      it("index user sends the user with age as json", fn() {
+        // Arrange
+        let server = opensearch_test_server.start(Respond(201, "{}"))
+        let opensearch = client.new(opensearch_test_server.base_url(server))
 
-  // Act
-  let _ = readme_quick_start.delete_alice(opensearch)
+        // Act
+        let _ = readme_indexing_documents.index_user(opensearch)
 
-  // Assert
-  opensearch_test_server.await_request(server)
-  |> should.be_ok
-  |> opensearch_test_server.request_line
-  |> should.equal(#("DELETE", "/users/_doc/123"))
-}
+        // Assert
+        opensearch_test_server.await_request(server)
+        |> result.map(opensearch_test_server.request_body)
+        |> should
+        |> be_equal(Ok(
+          "{\"name\":\"Alice\",\"email\":\"alice@example.com\",\"age\":30}",
+        ))
+        |> or_fail_with(
+          "indexing documents index user sends the user with age as json",
+        )
+      }),
+      it("index user reports success", fn() {
+        // Arrange
+        let server =
+          opensearch_test_server.start(Respond(201, "{\"result\":\"created\"}"))
+        let opensearch = client.new(opensearch_test_server.base_url(server))
 
-// ============================================================================
-// Client Setup
-// ============================================================================
+        // Act
+        let result = readme_indexing_documents.index_user(opensearch)
 
-pub fn client_setup_create_local_client_uses_localhost_9200_test() {
-  // Act
-  let opensearch = readme_client_setup.create_local_client()
+        // Assert
+        result
+        |> should
+        |> be_equal("Indexed successfully")
+        |> or_fail_with("indexing documents index user reports success")
+      }),
+      it("index user reports the error body", fn() {
+        // Arrange
+        let server =
+          opensearch_test_server.start(Respond(
+            400,
+            "{\"error\":\"bad request\"}",
+          ))
+        let opensearch = client.new(opensearch_test_server.base_url(server))
 
-  // Assert
-  opensearch.base_url |> should.equal("http://localhost:9200")
-}
+        // Act
+        let result = readme_indexing_documents.index_user(opensearch)
 
-pub fn client_setup_create_client_with_credentials_keeps_url_test() {
-  // Act
-  let opensearch = readme_client_setup.create_client_with_credentials()
+        // Assert
+        result
+        |> should
+        |> be_equal("Error: {\"error\":\"bad request\"}")
+        |> or_fail_with("indexing documents index user reports the error body")
+      }),
+    ]),
+    group("Searching", [
+      it("search by name sends a match query", fn() {
+        // Arrange
+        let server = opensearch_test_server.start(Respond(200, "{}"))
+        let opensearch = client.new(opensearch_test_server.base_url(server))
 
-  // Assert
-  opensearch.base_url
-  |> should.equal("https://user:pass@search.example.com:9200")
-}
+        // Act
+        let _ = readme_searching.search_by_name(opensearch)
 
-pub fn credentials_in_url_send_basic_authorization_header_test() {
-  // Arrange
-  let server = opensearch_test_server.start(Respond(200, "{}"))
-  let port = opensearch_test_server.port(server)
-  let opensearch =
-    client.new("http://user:pass@127.0.0.1:" <> int.to_string(port))
+        // Assert
+        opensearch_test_server.await_request(server)
+        |> result.map(opensearch_test_server.request_body)
+        |> should
+        |> be_equal(Ok("{\"query\":{\"match\":{\"name\":\"Alice\"}}}"))
+        |> or_fail_with("searching search by name sends a match query")
+      }),
+      it("search by status sends a term query", fn() {
+        // Arrange
+        let server = opensearch_test_server.start(Respond(200, "{}"))
+        let opensearch = client.new(opensearch_test_server.base_url(server))
 
-  // Act
-  let _ = readme_quick_start.search_for_alice(opensearch)
+        // Act
+        let _ = readme_searching.search_by_status(opensearch)
 
-  // Assert: base64 of "user:pass"
-  opensearch_test_server.await_request(server)
-  |> should.be_ok
-  |> opensearch_test_server.header_values("authorization")
-  |> should.equal(["Basic dXNlcjpwYXNz"])
-}
+        // Assert
+        opensearch_test_server.await_request(server)
+        |> result.map(opensearch_test_server.request_body)
+        |> should
+        |> be_equal(Ok("{\"query\":{\"term\":{\"status\":\"active\"}}}"))
+        |> or_fail_with("searching search by status sends a term query")
+      }),
+      it("search by age sends a range query", fn() {
+        // Arrange
+        let server = opensearch_test_server.start(Respond(200, "{}"))
+        let opensearch = client.new(opensearch_test_server.base_url(server))
 
-// ============================================================================
-// Indexing Documents
-// ============================================================================
+        // Act
+        let _ = readme_searching.search_by_age(opensearch)
 
-pub fn index_user_sends_the_user_with_age_as_json_test() {
-  // Arrange
-  let server = opensearch_test_server.start(Respond(201, "{}"))
-  let opensearch = client.new(opensearch_test_server.base_url(server))
+        // Assert
+        opensearch_test_server.await_request(server)
+        |> result.map(opensearch_test_server.request_body)
+        |> should
+        |> be_equal(Ok(
+          "{\"query\":{\"range\":{\"age\":{\"gte\":\"18\",\"lte\":\"65\"}}}}",
+        ))
+        |> or_fail_with("searching search by age sends a range query")
+      }),
+      it("search all sends a match all query to the search path", fn() {
+        // Arrange
+        let server = opensearch_test_server.start(Respond(200, "{}"))
+        let opensearch = client.new(opensearch_test_server.base_url(server))
 
-  // Act
-  let _ = readme_indexing_documents.index_user(opensearch)
+        // Act
+        let _ = readme_searching.search_all(opensearch)
 
-  // Assert
-  let request = opensearch_test_server.await_request(server) |> should.be_ok
-  request.body
-  |> should.equal(
-    "{\"name\":\"Alice\",\"email\":\"alice@example.com\",\"age\":30}",
-  )
-}
+        // Assert
+        opensearch_test_server.await_request(server)
+        |> result.map(opensearch_test_server.request_line_and_body)
+        |> should
+        |> be_equal(
+          Ok(#("POST", "/users/_search", "{\"query\":{\"match_all\":{}}}")),
+        )
+        |> or_fail_with(
+          "searching search all sends a match all query to the search path",
+        )
+      }),
+    ]),
+    group("Custom Queries", [
+      it("search active users named alice sends a bool query", fn() {
+        // Arrange
+        let server = opensearch_test_server.start(Respond(200, "{}"))
+        let opensearch = client.new(opensearch_test_server.base_url(server))
 
-pub fn index_user_reports_success_test() {
-  // Arrange
-  let server =
-    opensearch_test_server.start(Respond(201, "{\"result\":\"created\"}"))
-  let opensearch = client.new(opensearch_test_server.base_url(server))
+        // Act
+        let _ =
+          readme_custom_queries.search_active_users_named_alice(opensearch)
 
-  // Act
-  let result = readme_indexing_documents.index_user(opensearch)
+        // Assert
+        opensearch_test_server.await_request(server)
+        |> result.map(opensearch_test_server.request_body)
+        |> should
+        |> be_equal(Ok(
+          "{\"query\":{\"bool\":{\"must\":[{\"match\":{\"name\":\"Alice\"}}],\"filter\":[{\"term\":{\"status\":\"active\"}}]}}}",
+        ))
+        |> or_fail_with(
+          "custom queries search active users named alice sends a bool query",
+        )
+      }),
+    ]),
+    group("Index Management", [
+      it("create users index sends the mapping", fn() {
+        // Arrange
+        let server = opensearch_test_server.start(Respond(200, "{}"))
+        let opensearch = client.new(opensearch_test_server.base_url(server))
 
-  // Assert
-  result |> should.equal("Indexed successfully")
-}
+        // Act
+        let _ = readme_index_management.create_users_index(opensearch)
 
-pub fn index_user_reports_the_error_body_test() {
-  // Arrange
-  let server =
-    opensearch_test_server.start(Respond(400, "{\"error\":\"bad request\"}"))
-  let opensearch = client.new(opensearch_test_server.base_url(server))
+        // Assert
+        opensearch_test_server.await_request(server)
+        |> result.map(opensearch_test_server.request_line_and_body)
+        |> should
+        |> be_equal(
+          Ok(#(
+            "PUT",
+            "/users",
+            "{\"mappings\":{\"properties\":{\"name\":{\"type\":\"text\"},\"email\":{\"type\":\"keyword\"}}}}",
+          )),
+        )
+        |> or_fail_with("index management create users index sends the mapping")
+      }),
+      it("delete old index sends delete to the index path", fn() {
+        // Arrange
+        let server = opensearch_test_server.start(Respond(200, "{}"))
+        let opensearch = client.new(opensearch_test_server.base_url(server))
 
-  // Act
-  let result = readme_indexing_documents.index_user(opensearch)
+        // Act
+        let _ = readme_index_management.delete_old_index(opensearch)
 
-  // Assert
-  result |> should.equal("Error: {\"error\":\"bad request\"}")
-}
+        // Assert
+        opensearch_test_server.await_request(server)
+        |> result.map(opensearch_test_server.request_line)
+        |> should
+        |> be_equal(Ok(#("DELETE", "/old_index")))
+        |> or_fail_with(
+          "index management delete old index sends delete to the index path",
+        )
+      }),
+    ]),
+    group("Bulk Operations", [
+      it("bulk index users sends ndjson to the bulk path", fn() {
+        // Arrange
+        let server = opensearch_test_server.start(Respond(200, "{}"))
+        let opensearch = client.new(opensearch_test_server.base_url(server))
 
-// ============================================================================
-// Searching
-// ============================================================================
+        // Act
+        let _ = readme_bulk_operations.bulk_index_users(opensearch)
 
-pub fn search_by_name_sends_a_match_query_test() {
-  // Arrange
-  let server = opensearch_test_server.start(Respond(200, "{}"))
-  let opensearch = client.new(opensearch_test_server.base_url(server))
-
-  // Act
-  let _ = readme_searching.search_by_name(opensearch)
-
-  // Assert
-  let request = opensearch_test_server.await_request(server) |> should.be_ok
-  request.body
-  |> should.equal("{\"query\":{\"match\":{\"name\":\"Alice\"}}}")
-}
-
-pub fn search_by_status_sends_a_term_query_test() {
-  // Arrange
-  let server = opensearch_test_server.start(Respond(200, "{}"))
-  let opensearch = client.new(opensearch_test_server.base_url(server))
-
-  // Act
-  let _ = readme_searching.search_by_status(opensearch)
-
-  // Assert
-  let request = opensearch_test_server.await_request(server) |> should.be_ok
-  request.body
-  |> should.equal("{\"query\":{\"term\":{\"status\":\"active\"}}}")
-}
-
-pub fn search_by_age_sends_a_range_query_test() {
-  // Arrange
-  let server = opensearch_test_server.start(Respond(200, "{}"))
-  let opensearch = client.new(opensearch_test_server.base_url(server))
-
-  // Act
-  let _ = readme_searching.search_by_age(opensearch)
-
-  // Assert
-  let request = opensearch_test_server.await_request(server) |> should.be_ok
-  request.body
-  |> should.equal(
-    "{\"query\":{\"range\":{\"age\":{\"gte\":\"18\",\"lte\":\"65\"}}}}",
-  )
-}
-
-pub fn search_all_sends_a_match_all_query_to_the_search_path_test() {
-  // Arrange
-  let server = opensearch_test_server.start(Respond(200, "{}"))
-  let opensearch = client.new(opensearch_test_server.base_url(server))
-
-  // Act
-  let _ = readme_searching.search_all(opensearch)
-
-  // Assert
-  let request = opensearch_test_server.await_request(server) |> should.be_ok
-  #(request.method, request.target, request.body)
-  |> should.equal(#("POST", "/users/_search", "{\"query\":{\"match_all\":{}}}"))
-}
-
-// ============================================================================
-// Custom Queries
-// ============================================================================
-
-pub fn search_active_users_named_alice_sends_a_bool_query_test() {
-  // Arrange
-  let server = opensearch_test_server.start(Respond(200, "{}"))
-  let opensearch = client.new(opensearch_test_server.base_url(server))
-
-  // Act
-  let _ = readme_custom_queries.search_active_users_named_alice(opensearch)
-
-  // Assert
-  let request = opensearch_test_server.await_request(server) |> should.be_ok
-  request.body
-  |> should.equal(
-    "{\"query\":{\"bool\":{\"must\":[{\"match\":{\"name\":\"Alice\"}}],\"filter\":[{\"term\":{\"status\":\"active\"}}]}}}",
-  )
-}
-
-// ============================================================================
-// Index Management
-// ============================================================================
-
-pub fn create_users_index_sends_the_mapping_test() {
-  // Arrange
-  let server = opensearch_test_server.start(Respond(200, "{}"))
-  let opensearch = client.new(opensearch_test_server.base_url(server))
-
-  // Act
-  let _ = readme_index_management.create_users_index(opensearch)
-
-  // Assert
-  let request = opensearch_test_server.await_request(server) |> should.be_ok
-  #(request.method, request.target, request.body)
-  |> should.equal(#(
-    "PUT",
-    "/users",
-    "{\"mappings\":{\"properties\":{\"name\":{\"type\":\"text\"},\"email\":{\"type\":\"keyword\"}}}}",
-  ))
-}
-
-pub fn delete_old_index_sends_delete_to_the_index_path_test() {
-  // Arrange
-  let server = opensearch_test_server.start(Respond(200, "{}"))
-  let opensearch = client.new(opensearch_test_server.base_url(server))
-
-  // Act
-  let _ = readme_index_management.delete_old_index(opensearch)
-
-  // Assert
-  opensearch_test_server.await_request(server)
-  |> should.be_ok
-  |> opensearch_test_server.request_line
-  |> should.equal(#("DELETE", "/old_index"))
-}
-
-// ============================================================================
-// Bulk Operations
-// ============================================================================
-
-pub fn bulk_index_users_sends_ndjson_to_the_bulk_path_test() {
-  // Arrange
-  let server = opensearch_test_server.start(Respond(200, "{}"))
-  let opensearch = client.new(opensearch_test_server.base_url(server))
-
-  // Act
-  let _ = readme_bulk_operations.bulk_index_users(opensearch)
-
-  // Assert
-  let request = opensearch_test_server.await_request(server) |> should.be_ok
-  #(request.method, request.target, request.body)
-  |> should.equal(#(
-    "POST",
-    "/_bulk",
-    "{ \"index\": { \"_index\": \"users\", \"_id\": \"1\" } }\n"
-      <> "{ \"name\": \"Alice\", \"email\": \"alice@example.com\" }\n"
-      <> "{ \"index\": { \"_index\": \"users\", \"_id\": \"2\" } }\n"
-      <> "{ \"name\": \"Bob\", \"email\": \"bob@example.com\" }\n",
-  ))
+        // Assert
+        opensearch_test_server.await_request(server)
+        |> result.map(opensearch_test_server.request_line_and_body)
+        |> should
+        |> be_equal(
+          Ok(#(
+            "POST",
+            "/_bulk",
+            "{ \"index\": { \"_index\": \"users\", \"_id\": \"1\" } }\n"
+              <> "{ \"name\": \"Alice\", \"email\": \"alice@example.com\" }\n"
+              <> "{ \"index\": { \"_index\": \"users\", \"_id\": \"2\" } }\n"
+              <> "{ \"name\": \"Bob\", \"email\": \"bob@example.com\" }\n",
+          )),
+        )
+        |> or_fail_with(
+          "bulk operations bulk index users sends ndjson to the bulk path",
+        )
+      }),
+    ]),
+  ])
 }
