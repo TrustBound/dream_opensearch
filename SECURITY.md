@@ -4,8 +4,8 @@
 
 | Version | Supported          |
 | ------- | ------------------ |
-| 2.x     | ✅ Active support  |
-| < 2.0   | ❌ Not supported   |
+| 3.x     | ✅ Active support  |
+| < 3.0   | ❌ Not supported   |
 
 ## What dream_opensearch Is Responsible For
 
