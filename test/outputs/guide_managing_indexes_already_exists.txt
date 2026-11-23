@@ -1,0 +1,1 @@
+{"error":{"root_cause":[{"type":"resource_already_exists_exception","reason":"index [books/szRdA72vTjirBMobGJfr3g] already exists","index":"books","index_uuid":"szRdA72vTjirBMobGJfr3g"}],"type":"resource_already_exists_exception","reason":"index [books/szRdA72vTjirBMobGJfr3g] already exists","index":"books","index_uuid":"szRdA72vTjirBMobGJfr3g"},"status":400}

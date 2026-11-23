@@ -1,0 +1,2 @@
+POST /books/_search
+{"query":{"range":{"year":{"gte":"2020","lte":"2024"}}}}

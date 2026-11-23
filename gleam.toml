@@ -28,8 +28,11 @@ dream_http_client = { git = "https://github.com/TrustBound/dream_http_client.git
 # Switched to a Hex version range once it is published.
 dream_test = { git = "https://github.com/TrustBound/dream_test.git", ref = "1639959578a14ae3577f8e3ae5cac058f933aa53" }
 # Switched to a Hex version range once it is published.
-dream_snippets = { git = "https://github.com/TrustBound/dream_snippets.git", ref = "f116b072699ec33315980418036d962e22fab872" }
+dream_snippets = { git = "https://github.com/TrustBound/dream_snippets.git", ref = "6c2bf3e4d19bf023b09822def9cf04c72037b7e4" }
 
 [tools.dream_snippets]
 # Changelog sections and release notes before this version are history. They are not checked.
 checked_from_version = "3.0.0"
+# The files that the tests and CI use: the test code and its output files,
+# the scripts of the Makefile and CI, the OpenSearch of the tests, and this file.
+tested_files = ["test", "scripts", "docker-compose.yml", "gleam.toml"]

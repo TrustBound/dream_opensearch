@@ -53,6 +53,8 @@ Here is every kind of error, with the exact string, for a call such as `document
 
 The first rows are messages from the client. The OpenSearch row is different: the error is whatever body the server sent. For OpenSearch itself, that is a JSON error object, like this answer to a search on a missing index:
 
+### The answer for a missing index <a href="https://github.com/TrustBound/dream_opensearch/blob/3.0.0/test/outputs/guide_handling_errors_missing_index.txt"><img align="right" alt="Tested snippet" src="https://img.shields.io/badge/%F0%9F%A7%AA_tested-snippet-lightgreen.svg?style=flat-square"></a>
+
 ```text
 {"error":{"root_cause":[{"type":"index_not_found_exception","reason":"no such index [books]","index":"books","resource.id":"books","resource.type":"index_or_alias","index_uuid":"_na_"}],"type":"index_not_found_exception","reason":"no such index [books]","index":"books","resource.id":"books","resource.type":"index_or_alias","index_uuid":"_na_"},"status":404}
 ```
@@ -120,6 +122,8 @@ fn rejected_decoder() -> decode.Decoder(OpenSearchError) {
 `classify` checks the client's messages first, by their fixed start. Everything else is an answer from the server, and `from_body` tries to read it as an OpenSearch error object. If that works, you get `Rejected` with the status, the error type and the reason. If not, the body comes back whole in `OtherAnswer`.
 
 For the missing index from Step 1, `classify` returns:
+
+### The error that classify returns <a href="https://github.com/TrustBound/dream_opensearch/blob/3.0.0/test/outputs/guide_handling_errors_classified.txt"><img align="right" alt="Tested snippet" src="https://img.shields.io/badge/%F0%9F%A7%AA_tested-snippet-lightgreen.svg?style=flat-square"></a>
 
 ```text
 Rejected(status: 404, error_type: "index_not_found_exception", reason: "no such index [books]")
@@ -204,6 +208,8 @@ pub fn failure_line(opensearch: Client, message: String) -> String {
 
 For a client created with `client.new("https://admin:s3cret@search.example.com:9200")` and a refused connection, `failure_line` returns:
 
+### The line that failure_line returns <a href="https://github.com/TrustBound/dream_opensearch/blob/3.0.0/test/outputs/guide_handling_errors_failure_line.txt"><img align="right" alt="Tested snippet" src="https://img.shields.io/badge/%F0%9F%A7%AA_tested-snippet-lightgreen.svg?style=flat-square"></a>
+
 ```text
 OpenSearch request to https://search.example.com:9200 failed: Connection failed: Connection refused
 ```
@@ -222,8 +228,11 @@ Your error handling is the code that runs least in development, so test it on pu
 
 Add `dream_test` as a dev dependency, from GitHub, with the commit that this package tests with:
 
+### The dev dependency on dream_test <a href="https://github.com/TrustBound/dream_opensearch/blob/3.0.0/gleam.toml#L27-L29"><img align="right" alt="Tested snippet" src="https://img.shields.io/badge/%F0%9F%A7%AA_tested-snippet-lightgreen.svg?style=flat-square"></a>
+
 ```toml
 [dev-dependencies]
+# Switched to a Hex version range once it is published.
 dream_test = { git = "https://github.com/TrustBound/dream_test.git", ref = "1639959578a14ae3577f8e3ae5cac058f933aa53" }
 ```
 

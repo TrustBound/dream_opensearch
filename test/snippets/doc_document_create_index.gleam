@@ -4,7 +4,10 @@ import dream_opensearch/client.{type Client}
 import dream_opensearch/document
 import gleam/json
 
-pub fn create_users_index(opensearch: Client) -> Result(String, String) {
+pub fn create_users_index(
+  opensearch: Client,
+  index: String,
+) -> Result(String, String) {
   let mapping =
     json.object([
       #(
@@ -20,5 +23,5 @@ pub fn create_users_index(opensearch: Client) -> Result(String, String) {
         ]),
       ),
     ])
-  document.create_index(opensearch, "users", json.to_string(mapping))
+  document.create_index(opensearch, index, json.to_string(mapping))
 }

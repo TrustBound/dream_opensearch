@@ -1,0 +1,3 @@
+PUT /users/_doc/123
+POST /users/_refresh
+POST /users/_search

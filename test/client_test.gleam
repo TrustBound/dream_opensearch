@@ -1,17 +1,28 @@
 //// Black-box tests for `dream_opensearch/client`.
 ////
-//// Requests go to a one-shot server on 127.0.0.1 (see `test_server`), which
-//// records the request line, headers and body exactly as they arrive.
+//// The answers with status 200, 201, 400 and 404 come from the real
+//// OpenSearch of `opensearch_cluster`, each in its own index.
+////
+//// The other tests use a one-shot server on 127.0.0.1 (see
+//// `opensearch_test_server`), which records the request line, headers and
+//// body exactly as they arrive (a cluster does not report the requests it
+//// got), and which sends what a cluster cannot be made to send on demand:
+//// statuses such as 204, 399, 500 and 503, a body that is not JSON or not
+//// UTF-8, and a TLS handshake.
 
 import dream_opensearch/client.{Client}
+import dream_opensearch/document
 import dream_test/matchers.{be_equal, or_fail_with, should}
 import dream_test/suite.{type TestSuite}
 import dream_test/unit.{describe, group, it}
 import gleam/bit_array
+import gleam/dynamic/decode
 import gleam/http
 import gleam/int
+import gleam/json
 import gleam/result
 import gleam/string
+import opensearch_cluster
 import opensearch_test_server.{CaptureRawBytes, Respond, RespondBytes}
 
 pub fn tests() -> TestSuite {
@@ -242,34 +253,42 @@ pub fn tests() -> TestSuite {
     ]),
     group("send_request: how it maps responses and failures", [
       it("with 200 returns ok body", fn() {
-        // Arrange
-        let server =
-          opensearch_test_server.start(Respond(200, "{\"acknowledged\":true}"))
-        let os_client = client.new(opensearch_test_server.base_url(server))
-
         // Act
-        let result = client.send_request(os_client, http.Get, "/", "")
+        let result = {
+          use body <- result.try(client.send_request(
+            opensearch_cluster.client(),
+            http.Get,
+            "/",
+            "",
+          ))
+          json.parse(body, decode.at(["tagline"], decode.string))
+          |> result.replace_error("Unexpected root response: " <> body)
+        }
 
         // Assert
         result
         |> should
-        |> be_equal(Ok("{\"acknowledged\":true}"))
+        |> be_equal(Ok("The OpenSearch Project: https://opensearch.org/"))
         |> or_fail_with("send_request with 200 returns ok body")
       }),
       it("with 201 returns ok body", fn() {
-        // Arrange
-        let server =
-          opensearch_test_server.start(Respond(201, "{\"result\":\"created\"}"))
-        let os_client = client.new(opensearch_test_server.base_url(server))
-
         // Act
-        let result =
-          client.send_request(os_client, http.Put, "/users/_doc/1", "{}")
+        let result = {
+          use os_client, index <- opensearch_cluster.with_index("users")
+          use body <- result.try(client.send_request(
+            os_client,
+            http.Put,
+            "/" <> index <> "/_doc/1",
+            "{}",
+          ))
+          json.parse(body, decode.at(["result"], decode.string))
+          |> result.replace_error("Unexpected index response: " <> body)
+        }
 
         // Assert
         result
         |> should
-        |> be_equal(Ok("{\"result\":\"created\"}"))
+        |> be_equal(Ok("created"))
         |> or_fail_with("send_request with 201 returns ok body")
       }),
       it("with 204 and empty body returns ok empty string", fn() {
@@ -365,39 +384,48 @@ pub fn tests() -> TestSuite {
         |> or_fail_with("send_request with 399 returns ok body")
       }),
       it("with 400 returns error body", fn() {
-        // Arrange
-        let body = "{\"error\":{\"type\":\"parsing_exception\"},\"status\":400}"
-        let server = opensearch_test_server.start(Respond(400, body))
-        let os_client = client.new(opensearch_test_server.base_url(server))
-
         // Act
-        let result =
-          client.send_request(os_client, http.Post, "/u/_search", "{")
+        let result = {
+          use os_client, index <- opensearch_cluster.with_index("users")
+          use _ <- result.try(document.create_index(os_client, index, "{}"))
+          client.send_request(
+            os_client,
+            http.Post,
+            "/" <> index <> "/_search",
+            "{",
+          )
+          |> result.map_error(opensearch_cluster.error_type_and_status)
+          |> Ok
+        }
 
         // Assert
         result
         |> should
-        |> be_equal(Error(
-          "{\"error\":{\"type\":\"parsing_exception\"},\"status\":400}",
-        ))
+        |> be_equal(Ok(Error(Ok(#("json_e_o_f_exception", 400)))))
         |> or_fail_with("send_request with 400 returns error body")
       }),
       it("with 404 returns error body", fn() {
-        // Arrange
-        let body = "{\"_index\":\"users\",\"_id\":\"9\",\"found\":false}"
-        let server = opensearch_test_server.start(Respond(404, body))
-        let os_client = client.new(opensearch_test_server.base_url(server))
-
         // Act
-        let result =
-          client.send_request(os_client, http.Get, "/users/_doc/9", "")
+        let result = {
+          use os_client, index <- opensearch_cluster.with_index("users")
+          use _ <- result.try(document.create_index(os_client, index, "{}"))
+          // The index name varies, so put the name of the test in its place
+          client.send_request(
+            os_client,
+            http.Get,
+            "/" <> index <> "/_doc/9",
+            "",
+          )
+          |> result.map_error(string.replace(_, index, "users"))
+          |> Ok
+        }
 
         // Assert
         result
         |> should
-        |> be_equal(Error(
-          "{\"_index\":\"users\",\"_id\":\"9\",\"found\":false}",
-        ))
+        |> be_equal(
+          Ok(Error("{\"_index\":\"users\",\"_id\":\"9\",\"found\":false}")),
+        )
         |> or_fail_with("send_request with 404 returns error body")
       }),
       it("with 500 returns error body", fn() {

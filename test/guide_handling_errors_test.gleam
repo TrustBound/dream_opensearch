@@ -5,6 +5,9 @@
 //// made to do on demand: close a connection with no answer, send a body
 //// that is not UTF-8. Refused connections go to a port where nothing
 //// listens.
+////
+//// Each `text` block of the guide is a file in `test/outputs/`, and a test
+//// here compares it with the real output (see `guide_output`).
 
 import dream_opensearch/client.{type Client}
 import dream_opensearch/document
@@ -15,13 +18,32 @@ import gleam/http
 import gleam/list
 import gleam/result
 import gleam/string
+import guide_output
 import guide_responses
 import opensearch_cluster
 import opensearch_test_server.{type Reply, CloseWithoutAnswer, RespondBytes}
 import snippets/guide_handling_errors_classify.{
-  BadConfiguration, Interrupted, OtherAnswer, Rejected, Unreachable,
+  type OpenSearchError, BadConfiguration, Interrupted, OtherAnswer, Rejected,
+  Unreachable,
 }
 import snippets/guide_handling_errors_log
+
+/// `error` with the field labels of `Rejected`, as the guide shows it.
+/// The other variants are printed with `string.inspect`.
+fn labelled(error: OpenSearchError) -> String {
+  case error {
+    Rejected(status:, error_type:, reason:) ->
+      "Rejected(status: "
+      <> string.inspect(status)
+      <> ", error_type: "
+      <> string.inspect(error_type)
+      <> ", reason: "
+      <> string.inspect(reason)
+      <> ")"
+    _ -> string.inspect(error)
+  }
+  |> guide_output.lines
+}
 
 fn client_for(reply: Reply) -> Client {
   let server = opensearch_test_server.start(reply)
@@ -137,17 +159,25 @@ pub fn tests() -> TestSuite {
         // Act
         let searched = {
           use opensearch, index <- opensearch_cluster.with_index("books")
-          Ok(document.search(opensearch, index, "{}"))
+          // The index name varies, so put the name of the guide in its place
+          document.search(opensearch, index, "{}")
+          |> result.map_error(string.replace(_, index, "books"))
+          |> Ok
         }
 
         // Assert
         searched
-        |> result.map(result.map_error(
-          _,
-          opensearch_cluster.error_type_and_status,
-        ))
+        |> result.map(fn(outcome) {
+          case outcome {
+            Ok(body) -> Error("Expected a 404, got: " <> body)
+            Error(body) -> guide_output.stable_json(body, [])
+          }
+        })
+        |> result.flatten
         |> should
-        |> be_equal(Ok(Error(Ok(#("index_not_found_exception", 404)))))
+        |> be_equal(
+          guide_output.stable_file("guide_handling_errors_missing_index", []),
+        )
         |> or_fail_with("Expected the error body")
       }),
       it("a plain text 401 comes back as its body", fn() {
@@ -199,15 +229,10 @@ pub fn tests() -> TestSuite {
 
         // Assert
         error
+        |> result.map(result.map_error(_, labelled))
         |> should
         |> be_equal(
-          Ok(
-            Error(Rejected(
-              status: 404,
-              error_type: "index_not_found_exception",
-              reason: "no such index [books]",
-            )),
-          ),
+          Ok(Error(guide_output.file("guide_handling_errors_classified"))),
         )
         |> or_fail_with("Expected a 404 index_not_found_exception")
       }),
@@ -295,18 +320,27 @@ pub fn tests() -> TestSuite {
         let opensearch =
           client.new("https://admin:s3cret@search.example.com:9200")
 
+        let refused =
+          document.search(
+            client.new(opensearch_test_server.unreachable_base_url()),
+            "books",
+            "{}",
+          )
+
         // Act
         let line =
-          guide_handling_errors_log.failure_line(
+          refused
+          |> result.map_error(guide_handling_errors_log.failure_line(
             opensearch,
-            "Connection failed: Connection refused",
-          )
+            _,
+          ))
+          |> result.map_error(guide_output.lines)
 
         // Assert
         line
         |> should
         |> be_equal(
-          "OpenSearch request to https://search.example.com:9200 failed: Connection failed: Connection refused",
+          Error(guide_output.file("guide_handling_errors_failure_line")),
         )
         |> or_fail_with("The log line should not hold the password")
       }),

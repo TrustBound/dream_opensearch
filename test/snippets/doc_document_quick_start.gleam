@@ -8,11 +8,14 @@ pub fn create_client() -> Client {
   client.new("http://localhost:9200")
 }
 
-pub fn index_alice(opensearch: Client) -> Result(String, String) {
+pub fn index_alice(
+  opensearch: Client,
+  index: String,
+) -> Result(String, String) {
   let user =
     json.object([
       #("name", json.string("Alice")),
       #("email", json.string("alice@example.com")),
     ])
-  document.index(opensearch, "users", "123", json.to_string(user))
+  document.index(opensearch, index, "123", json.to_string(user))
 }

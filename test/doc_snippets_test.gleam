@@ -1,15 +1,22 @@
-//// Tests for the code blocks in the doc comments of `src/`.
+//// Tests for the code blocks in the doc comments of `src/`, against the real
+//// OpenSearch of `opensearch_cluster`.
 ////
-//// Requests go to the one-shot server in `opensearch_test_server` on
-//// 127.0.0.1, not to a real OpenSearch. The tests check the request each
-//// snippet sends and the result it returns.
+//// Each example takes the index name as a parameter, so each test gets its
+//// own index from `opensearch_cluster.with_index` and deletes it at the end.
+//// The tests check what each example stores, finds or returns.
 
-import dream_opensearch/client
+import dream_opensearch/client.{type Client}
+import dream_opensearch/document
 import dream_test/matchers.{be_equal, or_fail_with, should}
 import dream_test/suite.{type TestSuite}
 import dream_test/unit.{describe, group, it}
+import gleam/dynamic/decode
+import gleam/http
+import gleam/json
+import gleam/list
 import gleam/result
-import opensearch_test_server.{Respond}
+import gleam/string
+import opensearch_cluster
 import snippets/doc_client_new
 import snippets/doc_client_quick_start
 import snippets/doc_client_send_request
@@ -27,6 +34,80 @@ import snippets/doc_query_quick_start
 import snippets/doc_query_range
 import snippets/doc_query_term
 
+/// Alice, active, and Bob, inactive, as users 1 and 2.
+const users = [
+  #(
+    "1",
+    "{\"name\":\"Alice\",\"email\":\"alice@example.com\",\"status\":\"active\"}",
+  ),
+  #(
+    "2",
+    "{\"name\":\"Bob\",\"email\":\"bob@example.com\",\"status\":\"inactive\"}",
+  ),
+]
+
+/// Three products, at the prices 5, 50 and 500.
+const products = [
+  #("1", "{\"name\":\"Pen\",\"price\":5}"),
+  #("2", "{\"name\":\"Lamp\",\"price\":50}"),
+  #("3", "{\"name\":\"Desk\",\"price\":500}"),
+]
+
+/// Indexes each `#(id, json)` of `documents` in `index`, then refreshes it.
+fn load(
+  opensearch: Client,
+  index: String,
+  documents: List(#(String, String)),
+) -> Result(Nil, String) {
+  use _ <- result.try(
+    list.try_map(documents, fn(entry) {
+      document.index(opensearch, index, entry.0, entry.1)
+    }),
+  )
+  opensearch_cluster.refresh(opensearch, index)
+}
+
+/// Runs `search` on a new index with `documents`, and returns the IDs of the
+/// hits, sorted.
+fn found_ids(
+  prefix: String,
+  documents: List(#(String, String)),
+  search: fn(Client, String) -> Result(String, String),
+) -> Result(List(String), String) {
+  use opensearch, index <- opensearch_cluster.with_index(prefix)
+  use Nil <- result.try(load(opensearch, index, documents))
+  use body <- result.try(search(opensearch, index))
+  json.parse(
+    body,
+    decode.at(["hits", "hits"], decode.list(decode.at(["_id"], decode.string))),
+  )
+  |> result.map(list.sort(_, string.compare))
+  |> result.replace_error("Unexpected search response: " <> body)
+}
+
+/// The value of the field `field` in the `_source` of document 123 of
+/// `index`.
+fn stored_field(
+  opensearch: Client,
+  index: String,
+  field: String,
+) -> Result(String, String) {
+  use body <- result.try(client.send_request(
+    opensearch,
+    http.Get,
+    "/" <> index <> "/_doc/123",
+    "",
+  ))
+  json.parse(body, decode.at(["_source", field], decode.string))
+  |> result.replace_error("Unexpected document: " <> body)
+}
+
+/// The `result` field of an index or delete response.
+fn result_field(body: String) -> Result(String, String) {
+  json.parse(body, decode.at(["result"], decode.string))
+  |> result.replace_error("Unexpected response: " <> body)
+}
+
 pub fn tests() -> TestSuite {
   describe("doc comment snippets", [
     group("client module", [
@@ -40,35 +121,24 @@ pub fn tests() -> TestSuite {
         |> be_equal("http://localhost:9200")
         |> or_fail_with("create client uses localhost 9200")
       }),
-      it("index alice sends the user to the document path", fn() {
-        // Arrange
-        let server = opensearch_test_server.start(Respond(200, "{}"))
-        let opensearch = client.new(opensearch_test_server.base_url(server))
-
+      it("index alice creates the document 123 with her name", fn() {
         // Act
-        let _ = doc_client_quick_start.index_alice(opensearch)
+        let stored = {
+          use opensearch, index <- opensearch_cluster.with_index("users")
+          use body <- result.try(doc_client_quick_start.index_alice(
+            opensearch,
+            index,
+          ))
+          use outcome <- result.try(result_field(body))
+          use name <- result.try(stored_field(opensearch, index, "name"))
+          Ok(#(outcome, name))
+        }
 
         // Assert
-        opensearch_test_server.await_request(server)
-        |> result.map(opensearch_test_server.request_line_and_body)
+        stored
         |> should
-        |> be_equal(Ok(#("PUT", "/users/_doc/123", "{\"name\":\"Alice\"}")))
-        |> or_fail_with("index alice sends the user to the document path")
-      }),
-      it("index alice returns the response body", fn() {
-        // Arrange
-        let server =
-          opensearch_test_server.start(Respond(201, "{\"result\":\"created\"}"))
-        let opensearch = client.new(opensearch_test_server.base_url(server))
-
-        // Act
-        let result = doc_client_quick_start.index_alice(opensearch)
-
-        // Assert
-        result
-        |> should
-        |> be_equal(Ok("{\"result\":\"created\"}"))
-        |> or_fail_with("index alice returns the response body")
+        |> be_equal(Ok(#("created", "Alice")))
+        |> or_fail_with("Alice should be stored under 123")
       }),
     ]),
     group("client.new", [
@@ -94,35 +164,50 @@ pub fn tests() -> TestSuite {
       }),
     ]),
     group("client.send_request", [
-      it("get user sends get to the document path", fn() {
-        // Arrange
-        let server = opensearch_test_server.start(Respond(200, "{}"))
-        let opensearch = client.new(opensearch_test_server.base_url(server))
-
+      it("get user returns the stored document", fn() {
         // Act
-        let _ = doc_client_send_request.get_user(opensearch)
+        let fetched = {
+          use opensearch, index <- opensearch_cluster.with_index("users")
+          use _ <- result.try(document.index(
+            opensearch,
+            index,
+            "123",
+            "{\"name\":\"Alice\"}",
+          ))
+          use body <- result.try(doc_client_send_request.get_user(
+            opensearch,
+            index,
+          ))
+          let decoder = {
+            use found <- decode.field("found", decode.bool)
+            use name <- decode.subfield(["_source", "name"], decode.string)
+            decode.success(#(found, name))
+          }
+          json.parse(body, decoder)
+          |> result.replace_error("Unexpected document: " <> body)
+        }
 
         // Assert
-        opensearch_test_server.await_request(server)
-        |> result.map(opensearch_test_server.request_line_and_body)
+        fetched
         |> should
-        |> be_equal(Ok(#("GET", "/users/_doc/123", "")))
-        |> or_fail_with("get user sends get to the document path")
+        |> be_equal(Ok(#(True, "Alice")))
+        |> or_fail_with("get user should find Alice")
       }),
-      it("get user returns the response body", fn() {
-        // Arrange
-        let server =
-          opensearch_test_server.start(Respond(200, "{\"found\":true}"))
-        let opensearch = client.new(opensearch_test_server.base_url(server))
-
+      it("get user of a missing document is a 404 with found false", fn() {
         // Act
-        let result = doc_client_send_request.get_user(opensearch)
+        let fetched = {
+          use opensearch, index <- opensearch_cluster.with_index("users")
+          use _ <- result.try(document.create_index(opensearch, index, "{}"))
+          doc_client_send_request.get_user(opensearch, index)
+          |> result.map_error(json.parse(_, decode.at(["found"], decode.bool)))
+          |> Ok
+        }
 
         // Assert
-        result
+        fetched
         |> should
-        |> be_equal(Ok("{\"found\":true}"))
-        |> or_fail_with("get user returns the response body")
+        |> be_equal(Ok(Error(Ok(False))))
+        |> or_fail_with("A missing document comes back as its 404 body")
       }),
     ]),
     group("document module", [
@@ -136,346 +221,276 @@ pub fn tests() -> TestSuite {
         |> be_equal("http://localhost:9200")
         |> or_fail_with("create client uses localhost 9200")
       }),
-      it("index alice sends the user to the document path", fn() {
-        // Arrange
-        let server = opensearch_test_server.start(Respond(200, "{}"))
-        let opensearch = client.new(opensearch_test_server.base_url(server))
-
+      it("index alice stores her email", fn() {
         // Act
-        let _ = doc_document_quick_start.index_alice(opensearch)
+        let stored = {
+          use opensearch, index <- opensearch_cluster.with_index("users")
+          use _ <- result.try(doc_document_quick_start.index_alice(
+            opensearch,
+            index,
+          ))
+          stored_field(opensearch, index, "email")
+        }
 
         // Assert
-        opensearch_test_server.await_request(server)
-        |> result.map(opensearch_test_server.request_line_and_body)
+        stored
         |> should
-        |> be_equal(
-          Ok(#(
-            "PUT",
-            "/users/_doc/123",
-            "{\"name\":\"Alice\",\"email\":\"alice@example.com\"}",
-          )),
-        )
-        |> or_fail_with("index alice sends the user to the document path")
-      }),
-      it("index alice returns the response body", fn() {
-        // Arrange
-        let server =
-          opensearch_test_server.start(Respond(201, "{\"result\":\"created\"}"))
-        let opensearch = client.new(opensearch_test_server.base_url(server))
-
-        // Act
-        let result = doc_document_quick_start.index_alice(opensearch)
-
-        // Assert
-        result
-        |> should
-        |> be_equal(Ok("{\"result\":\"created\"}"))
-        |> or_fail_with("index alice returns the response body")
+        |> be_equal(Ok("alice@example.com"))
+        |> or_fail_with("Alice's email should be stored under 123")
       }),
     ]),
     group("document.index", [
-      it("index alice sends the user to the document path", fn() {
-        // Arrange
-        let server = opensearch_test_server.start(Respond(200, "{}"))
-        let opensearch = client.new(opensearch_test_server.base_url(server))
-
-        // Act
-        let _ = doc_document_index.index_alice(opensearch)
-
-        // Assert
-        opensearch_test_server.await_request(server)
-        |> result.map(opensearch_test_server.request_line_and_body)
-        |> should
-        |> be_equal(
-          Ok(#(
-            "PUT",
-            "/users/_doc/123",
-            "{\"name\":\"Alice\",\"email\":\"alice@example.com\"}",
-          )),
-        )
-        |> or_fail_with("index alice sends the user to the document path")
-      }),
       it("index alice reports success", fn() {
-        // Arrange
-        let server =
-          opensearch_test_server.start(Respond(201, "{\"result\":\"created\"}"))
-        let opensearch = client.new(opensearch_test_server.base_url(server))
-
         // Act
-        let result = doc_document_index.index_alice(opensearch)
+        let reported = {
+          use opensearch, index <- opensearch_cluster.with_index("users")
+          Ok(doc_document_index.index_alice(opensearch, index))
+        }
 
         // Assert
-        result
+        reported
         |> should
-        |> be_equal("Indexed successfully")
+        |> be_equal(Ok("Indexed successfully"))
         |> or_fail_with("index alice reports success")
       }),
-      it("index alice reports the error body", fn() {
-        // Arrange
-        let server =
-          opensearch_test_server.start(Respond(400, "{\"status\":400}"))
-        let opensearch = client.new(opensearch_test_server.base_url(server))
-
+      it("index alice reports the error body of a refused index name", fn() {
         // Act
-        let result = doc_document_index.index_alice(opensearch)
+        let reported =
+          doc_document_index.index_alice(opensearch_cluster.client(), "Users")
 
         // Assert
-        result
+        reported
         |> should
-        |> be_equal("Error: {\"status\":400}")
-        |> or_fail_with("index alice reports the error body")
+        |> be_equal(
+          "Error: {\"error\":{\"root_cause\":[{\"type\":\"invalid_index_name_exception\",\"reason\":\"Invalid index name [Users], must be lowercase\",\"index\":\"Users\",\"index_uuid\":\"_na_\"}],\"type\":\"invalid_index_name_exception\",\"reason\":\"Invalid index name [Users], must be lowercase\",\"index\":\"Users\",\"index_uuid\":\"_na_\"},\"status\":400}",
+        )
+        |> or_fail_with("An upper-case index name gets a 400")
       }),
     ]),
     group("document.search", [
-      it("search for alice sends a match query", fn() {
-        // Arrange
-        let server = opensearch_test_server.start(Respond(200, "{}"))
-        let opensearch = client.new(opensearch_test_server.base_url(server))
-
+      it("search for alice finds her", fn() {
         // Act
-        let _ = doc_document_search.search_for_alice(opensearch)
+        let found =
+          found_ids("users", users, doc_document_search.search_for_alice)
 
         // Assert
-        opensearch_test_server.await_request(server)
-        |> result.map(opensearch_test_server.request_line_and_body)
+        found
         |> should
-        |> be_equal(
-          Ok(#(
-            "POST",
-            "/users/_search",
-            "{\"query\":{\"match\":{\"name\":\"Alice\"}}}",
-          )),
-        )
-        |> or_fail_with("search for alice sends a match query")
+        |> be_equal(Ok(["1"]))
+        |> or_fail_with("Only Alice matches")
       }),
-      it("search for alice returns the response body", fn() {
-        // Arrange
-        let server =
-          opensearch_test_server.start(Respond(200, "{\"hits\":{\"total\":1}}"))
-        let opensearch = client.new(opensearch_test_server.base_url(server))
-
+      it("search for alice in a missing index is a 404", fn() {
         // Act
-        let result = doc_document_search.search_for_alice(opensearch)
+        let found = {
+          use opensearch, index <- opensearch_cluster.with_index("users")
+          doc_document_search.search_for_alice(opensearch, index)
+          |> result.map_error(opensearch_cluster.error_type_and_status)
+          |> Ok
+        }
 
         // Assert
-        result
+        found
         |> should
-        |> be_equal(Ok("{\"hits\":{\"total\":1}}"))
-        |> or_fail_with("search for alice returns the response body")
+        |> be_equal(Ok(Error(Ok(#("index_not_found_exception", 404)))))
+        |> or_fail_with("A missing index comes back as its 404 body")
       }),
     ]),
     group("document.delete", [
-      it("delete user sends delete to the document path", fn() {
-        // Arrange
-        let server = opensearch_test_server.start(Respond(200, "{}"))
-        let opensearch = client.new(opensearch_test_server.base_url(server))
-
-        // Act
-        let _ = doc_document_delete.delete_user(opensearch)
-
-        // Assert
-        opensearch_test_server.await_request(server)
-        |> result.map(opensearch_test_server.request_line_and_body)
-        |> should
-        |> be_equal(Ok(#("DELETE", "/users/_doc/123", "")))
-        |> or_fail_with("delete user sends delete to the document path")
-      }),
       it("delete user reports success", fn() {
-        // Arrange
-        let server =
-          opensearch_test_server.start(Respond(200, "{\"result\":\"deleted\"}"))
-        let opensearch = client.new(opensearch_test_server.base_url(server))
-
         // Act
-        let result = doc_document_delete.delete_user(opensearch)
+        let reported = {
+          use opensearch, index <- opensearch_cluster.with_index("users")
+          use _ <- result.try(document.index(
+            opensearch,
+            index,
+            "123",
+            "{\"name\":\"Alice\"}",
+          ))
+          Ok(doc_document_delete.delete_user(opensearch, index))
+        }
 
         // Assert
-        result
+        reported
         |> should
-        |> be_equal("Document deleted")
+        |> be_equal(Ok("Document deleted"))
         |> or_fail_with("delete user reports success")
       }),
-      it("delete user reports the error body", fn() {
-        // Arrange
-        let server =
-          opensearch_test_server.start(Respond(404, "{\"found\":false}"))
-        let opensearch = client.new(opensearch_test_server.base_url(server))
-
+      it("delete user reports the 404 body of a missing document", fn() {
         // Act
-        let result = doc_document_delete.delete_user(opensearch)
+        let reported = {
+          use opensearch, index <- opensearch_cluster.with_index("users")
+          use _ <- result.try(document.create_index(opensearch, index, "{}"))
+          // The index name varies, so put the name of the example in its place
+          doc_document_delete.delete_user(opensearch, index)
+          |> string.replace(index, "users")
+          |> Ok
+        }
 
         // Assert
-        result
+        reported
         |> should
-        |> be_equal("Error: {\"found\":false}")
-        |> or_fail_with("delete user reports the error body")
+        |> be_equal(Ok(
+          "Error: {\"_index\":\"users\",\"_id\":\"123\",\"_version\":1,\"result\":\"not_found\",\"_shards\":{\"total\":2,\"successful\":1,\"failed\":0},\"_seq_no\":0,\"_primary_term\":1}",
+        ))
+        |> or_fail_with("A missing document gets a 404 with not_found")
       }),
     ]),
     group("document.create_index", [
-      it("create users index sends the mapping", fn() {
-        // Arrange
-        let server = opensearch_test_server.start(Respond(200, "{}"))
-        let opensearch = client.new(opensearch_test_server.base_url(server))
-
+      it("create users index answers acknowledged", fn() {
         // Act
-        let _ = doc_document_create_index.create_users_index(opensearch)
+        let created = {
+          use opensearch, index <- opensearch_cluster.with_index("users")
+          // The index name varies, so put the name of the example in its place
+          doc_document_create_index.create_users_index(opensearch, index)
+          |> result.map(string.replace(_, index, "users"))
+        }
 
         // Assert
-        opensearch_test_server.await_request(server)
-        |> result.map(opensearch_test_server.request_line_and_body)
+        created
         |> should
-        |> be_equal(
-          Ok(#(
-            "PUT",
-            "/users",
-            "{\"mappings\":{\"properties\":{\"name\":{\"type\":\"text\"},\"email\":{\"type\":\"keyword\"}}}}",
-          )),
-        )
-        |> or_fail_with("create users index sends the mapping")
+        |> be_equal(Ok(
+          "{\"acknowledged\":true,\"shards_acknowledged\":true,\"index\":\"users\"}",
+        ))
+        |> or_fail_with("create users index answers acknowledged")
       }),
-      it("create users index returns the response body", fn() {
-        // Arrange
-        let server =
-          opensearch_test_server.start(Respond(200, "{\"acknowledged\":true}"))
-        let opensearch = client.new(opensearch_test_server.base_url(server))
-
+      it("create users index maps the email as a keyword", fn() {
         // Act
-        let result = doc_document_create_index.create_users_index(opensearch)
+        let mapped = {
+          use opensearch, index <- opensearch_cluster.with_index("users")
+          use _ <- result.try(doc_document_create_index.create_users_index(
+            opensearch,
+            index,
+          ))
+          use body <- result.try(client.send_request(
+            opensearch,
+            http.Get,
+            "/" <> index <> "/_mapping",
+            "",
+          ))
+          json.parse(
+            body,
+            decode.at(
+              [index, "mappings", "properties", "email", "type"],
+              decode.string,
+            ),
+          )
+          |> result.replace_error("Unexpected mapping: " <> body)
+        }
 
         // Assert
-        result
+        mapped
         |> should
-        |> be_equal(Ok("{\"acknowledged\":true}"))
-        |> or_fail_with("create users index returns the response body")
+        |> be_equal(Ok("keyword"))
+        |> or_fail_with("The mapping of the example should be in place")
+      }),
+      it("create users index of an existing index is a 400", fn() {
+        // Act
+        let created = {
+          use opensearch, index <- opensearch_cluster.with_index("users")
+          use _ <- result.try(doc_document_create_index.create_users_index(
+            opensearch,
+            index,
+          ))
+          doc_document_create_index.create_users_index(opensearch, index)
+          |> result.map_error(opensearch_cluster.error_type_and_status)
+          |> Ok
+        }
+
+        // Assert
+        created
+        |> should
+        |> be_equal(Ok(Error(Ok(#("resource_already_exists_exception", 400)))))
+        |> or_fail_with("The second create should fail")
       }),
     ]),
     group("document.delete_index", [
-      it("delete old index sends delete to the index path", fn() {
-        // Arrange
-        let server = opensearch_test_server.start(Respond(200, "{}"))
-        let opensearch = client.new(opensearch_test_server.base_url(server))
-
-        // Act
-        let _ = doc_document_delete_index.delete_old_index(opensearch)
-
-        // Assert
-        opensearch_test_server.await_request(server)
-        |> result.map(opensearch_test_server.request_line_and_body)
-        |> should
-        |> be_equal(Ok(#("DELETE", "/old_index", "")))
-        |> or_fail_with("delete old index sends delete to the index path")
-      }),
       it("delete old index reports success", fn() {
-        // Arrange
-        let server =
-          opensearch_test_server.start(Respond(200, "{\"acknowledged\":true}"))
-        let opensearch = client.new(opensearch_test_server.base_url(server))
-
         // Act
-        let result = doc_document_delete_index.delete_old_index(opensearch)
+        let reported = {
+          use opensearch, index <- opensearch_cluster.with_index("old_index")
+          use _ <- result.try(document.create_index(opensearch, index, "{}"))
+          Ok(doc_document_delete_index.delete_old_index(opensearch, index))
+        }
 
         // Assert
-        result
+        reported
         |> should
-        |> be_equal("Index deleted")
+        |> be_equal(Ok("Index deleted"))
         |> or_fail_with("delete old index reports success")
       }),
-      it("delete old index reports the error body", fn() {
-        // Arrange
-        let server =
-          opensearch_test_server.start(Respond(404, "{\"status\":404}"))
-        let opensearch = client.new(opensearch_test_server.base_url(server))
-
+      it("delete old index reports the 404 body of a missing index", fn() {
         // Act
-        let result = doc_document_delete_index.delete_old_index(opensearch)
+        let reported = {
+          use opensearch, index <- opensearch_cluster.with_index("old_index")
+          // The index name varies, so put the name of the example in its place
+          doc_document_delete_index.delete_old_index(opensearch, index)
+          |> string.replace(index, "old_index")
+          |> Ok
+        }
 
         // Assert
-        result
+        reported
         |> should
-        |> be_equal("Error: {\"status\":404}")
-        |> or_fail_with("delete old index reports the error body")
+        |> be_equal(Ok(
+          "Error: {\"error\":{\"root_cause\":[{\"type\":\"index_not_found_exception\",\"reason\":\"no such index [old_index]\",\"index\":\"old_index\",\"resource.id\":\"old_index\",\"resource.type\":\"index_or_alias\",\"index_uuid\":\"_na_\"}],\"type\":\"index_not_found_exception\",\"reason\":\"no such index [old_index]\",\"index\":\"old_index\",\"resource.id\":\"old_index\",\"resource.type\":\"index_or_alias\",\"index_uuid\":\"_na_\"},\"status\":404}",
+        ))
+        |> or_fail_with("A missing index gets a 404")
       }),
     ]),
     group("document.bulk", [
-      it("bulk index users sends ndjson to the bulk path", fn() {
-        // Arrange
-        let server = opensearch_test_server.start(Respond(200, "{}"))
-        let opensearch = client.new(opensearch_test_server.base_url(server))
-
+      it("bulk index users stores both users with no errors", fn() {
         // Act
-        let _ = doc_document_bulk.bulk_index_users(opensearch)
+        let loaded = {
+          use opensearch, index <- opensearch_cluster.with_index("users")
+          use body <- result.try(doc_document_bulk.bulk_index_users(
+            opensearch,
+            index,
+          ))
+          use errors <- result.try(
+            json.parse(body, decode.at(["errors"], decode.bool))
+            |> result.replace_error("Unexpected bulk response: " <> body),
+          )
+          use Nil <- result.try(opensearch_cluster.refresh(opensearch, index))
+          use counted <- result.try(client.send_request(
+            opensearch,
+            http.Get,
+            "/" <> index <> "/_count",
+            "",
+          ))
+          json.parse(counted, decode.at(["count"], decode.int))
+          |> result.map(fn(count) { #(errors, count) })
+          |> result.replace_error("Unexpected count response: " <> counted)
+        }
 
         // Assert
-        opensearch_test_server.await_request(server)
-        |> result.map(opensearch_test_server.request_line_and_body)
+        loaded
         |> should
-        |> be_equal(
-          Ok(#(
-            "POST",
-            "/_bulk",
-            "{ \"index\": { \"_index\": \"users\", \"_id\": \"1\" } }\n{ \"name\": \"Alice\", \"email\": \"alice@example.com\" }\n{ \"index\": { \"_index\": \"users\", \"_id\": \"2\" } }\n{ \"name\": \"Bob\", \"email\": \"bob@example.com\" }\n",
-          )),
-        )
-        |> or_fail_with("bulk index users sends ndjson to the bulk path")
-      }),
-      it("bulk index users returns the response body", fn() {
-        // Arrange
-        let server =
-          opensearch_test_server.start(Respond(200, "{\"errors\":false}"))
-        let opensearch = client.new(opensearch_test_server.base_url(server))
-
-        // Act
-        let result = doc_document_bulk.bulk_index_users(opensearch)
-
-        // Assert
-        result
-        |> should
-        |> be_equal(Ok("{\"errors\":false}"))
-        |> or_fail_with("bulk index users returns the response body")
+        |> be_equal(Ok(#(False, 2)))
+        |> or_fail_with("Alice and Bob should be stored")
       }),
     ]),
     group("query module: quick start", [
-      it("search by name sends a match query", fn() {
-        // Arrange
-        let server = opensearch_test_server.start(Respond(200, "{}"))
-        let opensearch = client.new(opensearch_test_server.base_url(server))
-
+      it("search by name finds Alice", fn() {
         // Act
-        let _ = doc_query_quick_start.search_by_name(opensearch)
+        let found =
+          found_ids("users", users, doc_query_quick_start.search_by_name)
 
         // Assert
-        opensearch_test_server.await_request(server)
-        |> result.map(opensearch_test_server.request_line_and_body)
+        found
         |> should
-        |> be_equal(
-          Ok(#(
-            "POST",
-            "/users/_search",
-            "{\"query\":{\"match\":{\"name\":\"Alice\"}}}",
-          )),
-        )
-        |> or_fail_with("search by name sends a match query")
+        |> be_equal(Ok(["1"]))
+        |> or_fail_with("Only Alice matches the name")
       }),
-      it("search by status sends a term query", fn() {
-        // Arrange
-        let server = opensearch_test_server.start(Respond(200, "{}"))
-        let opensearch = client.new(opensearch_test_server.base_url(server))
-
+      it("search by status finds the active user", fn() {
         // Act
-        let _ = doc_query_quick_start.search_by_status(opensearch)
+        let found =
+          found_ids("users", users, doc_query_quick_start.search_by_status)
 
         // Assert
-        opensearch_test_server.await_request(server)
-        |> result.map(opensearch_test_server.request_line_and_body)
+        found
         |> should
-        |> be_equal(
-          Ok(#(
-            "POST",
-            "/users/_search",
-            "{\"query\":{\"term\":{\"status\":\"active\"}}}",
-          )),
-        )
-        |> or_fail_with("search by status sends a term query")
+        |> be_equal(Ok(["1"]))
+        |> or_fail_with("Only Alice is active")
       }),
     ]),
     group("query module: custom query", [
@@ -491,93 +506,78 @@ pub fn tests() -> TestSuite {
         )
         |> or_fail_with("build bool query returns the bool query json")
       }),
-    ]),
-    group("query.match_all", [
-      it("search all users sends a match all query", fn() {
-        // Arrange
-        let server = opensearch_test_server.start(Respond(200, "{}"))
-        let opensearch = client.new(opensearch_test_server.base_url(server))
-
+      it("the bool query finds Alice", fn() {
         // Act
-        let _ = doc_query_match_all.search_all_users(opensearch)
+        let found =
+          found_ids("users", users, fn(opensearch, index) {
+            document.search(
+              opensearch,
+              index,
+              doc_query_custom.build_bool_query(),
+            )
+          })
 
         // Assert
-        opensearch_test_server.await_request(server)
-        |> result.map(opensearch_test_server.request_line_and_body)
+        found
         |> should
-        |> be_equal(
-          Ok(#("POST", "/users/_search", "{\"query\":{\"match_all\":{}}}")),
-        )
-        |> or_fail_with("search all users sends a match all query")
+        |> be_equal(Ok(["1"]))
+        |> or_fail_with("Only Alice matches the bool query")
+      }),
+    ]),
+    group("query.match_all", [
+      it("search all users finds every user", fn() {
+        // Act
+        let found =
+          found_ids("users", users, doc_query_match_all.search_all_users)
+
+        // Assert
+        found
+        |> should
+        |> be_equal(Ok(["1", "2"]))
+        |> or_fail_with("match_all finds Alice and Bob")
       }),
     ]),
     group("query.term", [
-      it("search active users sends a term query", fn() {
-        // Arrange
-        let server = opensearch_test_server.start(Respond(200, "{}"))
-        let opensearch = client.new(opensearch_test_server.base_url(server))
-
+      it("search active users finds the active user", fn() {
         // Act
-        let _ = doc_query_term.search_active_users(opensearch)
+        let found =
+          found_ids("users", users, doc_query_term.search_active_users)
 
         // Assert
-        opensearch_test_server.await_request(server)
-        |> result.map(opensearch_test_server.request_line_and_body)
+        found
         |> should
-        |> be_equal(
-          Ok(#(
-            "POST",
-            "/users/_search",
-            "{\"query\":{\"term\":{\"status\":\"active\"}}}",
-          )),
-        )
-        |> or_fail_with("search active users sends a term query")
+        |> be_equal(Ok(["1"]))
+        |> or_fail_with("Only Alice is active")
       }),
     ]),
     group("query.range", [
-      it("search products by price sends a range query", fn() {
-        // Arrange
-        let server = opensearch_test_server.start(Respond(200, "{}"))
-        let opensearch = client.new(opensearch_test_server.base_url(server))
-
+      it("search products by price finds the product at 50", fn() {
         // Act
-        let _ = doc_query_range.search_products_by_price(opensearch)
+        let found =
+          found_ids(
+            "products",
+            products,
+            doc_query_range.search_products_by_price,
+          )
 
         // Assert
-        opensearch_test_server.await_request(server)
-        |> result.map(opensearch_test_server.request_line_and_body)
+        found
         |> should
-        |> be_equal(
-          Ok(#(
-            "POST",
-            "/products/_search",
-            "{\"query\":{\"range\":{\"price\":{\"gte\":\"10\",\"lte\":\"100\"}}}}",
-          )),
-        )
-        |> or_fail_with("search products by price sends a range query")
+        |> be_equal(Ok(["2"]))
+        |> or_fail_with("Only the lamp costs between 10 and 100")
       }),
     ]),
     group("query.match", [
-      it("search users named alice sends a match query", fn() {
-        // Arrange
-        let server = opensearch_test_server.start(Respond(200, "{}"))
-        let opensearch = client.new(opensearch_test_server.base_url(server))
-
+      it("search users named alice finds Alice", fn() {
         // Act
-        let _ = doc_query_match.search_users_named_alice(opensearch)
+        let found =
+          found_ids("users", users, doc_query_match.search_users_named_alice)
 
         // Assert
-        opensearch_test_server.await_request(server)
-        |> result.map(opensearch_test_server.request_line_and_body)
+        found
         |> should
-        |> be_equal(
-          Ok(#(
-            "POST",
-            "/users/_search",
-            "{\"query\":{\"match\":{\"name\":\"Alice\"}}}",
-          )),
-        )
-        |> or_fail_with("search users named alice sends a match query")
+        |> be_equal(Ok(["1"]))
+        |> or_fail_with("Only Alice matches the name")
       }),
     ]),
   ])

@@ -7,6 +7,9 @@ pub fn create_client() -> Client {
   client.new("http://localhost:9200")
 }
 
-pub fn index_alice(opensearch: Client) -> Result(String, String) {
-  document.index(opensearch, "users", "123", "{\"name\":\"Alice\"}")
+pub fn index_alice(
+  opensearch: Client,
+  index: String,
+) -> Result(String, String) {
+  document.index(opensearch, index, "123", "{\"name\":\"Alice\"}")
 }

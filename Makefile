@@ -12,7 +12,7 @@ test:
 # both nodes are healthy: http://localhost:9201 (security plugin off) and
 # http://localhost:9202 (security plugin on)
 search-up:
-	@docker compose up -d --wait
+	@sh scripts/search-up.sh
 
 # Stop OpenSearch and remove its containers (no data is kept)
 search-down:
@@ -26,13 +26,9 @@ build:
 format:
 	@gleam format src test
 
-# Format check, build, tests and docs build (the CI checks)
+# Format check, build, tests, docs build and snippet check (what CI runs)
 check:
-	@gleam format --check src test
-	@gleam build
-	@gleam test
-	@gleam docs build
-	@gleam run -m dream_snippets
+	@sh scripts/check.sh
 
 # Check that each code block in the docs matches a tested snippet
 check-snippets:

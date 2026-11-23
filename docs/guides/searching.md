@@ -140,12 +140,16 @@ pub fn books_about(
 
 `books_about(opensearch, "books", "gleam")` sends this request:
 
+### The request of books_about <a href="https://github.com/TrustBound/dream_opensearch/blob/3.0.0/test/outputs/guide_searching_match_request.txt"><img align="right" alt="Tested snippet" src="https://img.shields.io/badge/%F0%9F%A7%AA_tested-snippet-lightgreen.svg?style=flat-square"></a>
+
 ```text
 POST /books/_search
 {"query":{"match":{"title":"gleam"}}}
 ```
 
 For an index that holds these two books, OpenSearch answers with this body:
+
+### The answer to the match query <a href="https://github.com/TrustBound/dream_opensearch/blob/3.0.0/test/outputs/guide_searching_match_response.txt"><img align="right" alt="Tested snippet" src="https://img.shields.io/badge/%F0%9F%A7%AA_tested-snippet-lightgreen.svg?style=flat-square"></a>
 
 ```text
 {"took":1,"timed_out":false,"_shards":{"total":1,"successful":1,"skipped":0,"failed":0},"hits":{"total":{"value":2,"relation":"eq"},"max_score":0.21110919,"hits":[{"_index":"books","_id":"1","_score":0.21110919,"_source":{"title":"Programming Gleam","author":"Jo Lee","year":2024,"in_stock":true}},{"_index":"books","_id":"2","_score":0.160443,"_source":{"title":"Gleam for Erlang Developers","author":"Sam Park","year":2022,"in_stock":false}}]}}
@@ -159,6 +163,8 @@ The decoder reads two things from it:
 - `hits.hits`: the documents of this page, best match first. Each hit has the document ID in `_id`, its relevance in `_score`, and the document you stored in `_source`.
 
 So `books_about` returns:
+
+### The result of books_about <a href="https://github.com/TrustBound/dream_opensearch/blob/3.0.0/test/outputs/guide_searching_books_about.txt"><img align="right" alt="Tested snippet" src="https://img.shields.io/badge/%F0%9F%A7%AA_tested-snippet-lightgreen.svg?style=flat-square"></a>
 
 ```text
 Ok(SearchResult(total: 2, books: [Book(id: "1", title: "Programming Gleam", author: "Jo Lee", year: 2024, in_stock: True), Book(id: "2", title: "Gleam for Erlang Developers", author: "Sam Park", year: 2022, in_stock: False)]))
@@ -186,6 +192,8 @@ pub fn books_by(
 ```
 
 `books_by(opensearch, "books", "Jo Lee")` sends:
+
+### The request of books_by <a href="https://github.com/TrustBound/dream_opensearch/blob/3.0.0/test/outputs/guide_searching_term_request.txt"><img align="right" alt="Tested snippet" src="https://img.shields.io/badge/%F0%9F%A7%AA_tested-snippet-lightgreen.svg?style=flat-square"></a>
 
 ```text
 POST /books/_search
@@ -219,6 +227,8 @@ pub fn books_published_between(
 ```
 
 `books_published_between(opensearch, "books", 2020, 2024)` sends:
+
+### The request of books_published_between <a href="https://github.com/TrustBound/dream_opensearch/blob/3.0.0/test/outputs/guide_searching_range_request.txt"><img align="right" alt="Tested snippet" src="https://img.shields.io/badge/%F0%9F%A7%AA_tested-snippet-lightgreen.svg?style=flat-square"></a>
 
 ```text
 POST /books/_search
@@ -305,6 +315,8 @@ The parts of the body:
 
 `in_stock_query("gleam", 2020, 1, 10)` returns this body:
 
+### The body of in_stock_query <a href="https://github.com/TrustBound/dream_opensearch/blob/3.0.0/test/outputs/guide_searching_in_stock_query.txt"><img align="right" alt="Tested snippet" src="https://img.shields.io/badge/%F0%9F%A7%AA_tested-snippet-lightgreen.svg?style=flat-square"></a>
+
 ```text
 {"query":{"bool":{"must":[{"match":{"title":"gleam"}}],"filter":[{"term":{"in_stock":true}},{"range":{"year":{"gte":2020}}}]}},"from":0,"size":10,"sort":[{"year":{"order":"desc"}}]}
 ```
@@ -319,11 +331,15 @@ Note that `in_stock_query` sends no request. It is a plain function from your pa
 
 **The index does not exist.** OpenSearch answers with status 404, and the error is the response body:
 
+### The answer for a missing index <a href="https://github.com/TrustBound/dream_opensearch/blob/3.0.0/test/outputs/guide_searching_missing_index.txt"><img align="right" alt="Tested snippet" src="https://img.shields.io/badge/%F0%9F%A7%AA_tested-snippet-lightgreen.svg?style=flat-square"></a>
+
 ```text
 {"error":{"root_cause":[{"type":"index_not_found_exception","reason":"no such index [books]","index":"books","resource.id":"books","resource.type":"index_or_alias","index_uuid":"_na_"}],"type":"index_not_found_exception","reason":"no such index [books]","index":"books","resource.id":"books","resource.type":"index_or_alias","index_uuid":"_na_"},"status":404}
 ```
 
 **OpenSearch cannot read the query.** A misspelled query type, such as `matches` for `match`, gets status 400 and a body that says where the problem is:
+
+### The answer to a misspelled query <a href="https://github.com/TrustBound/dream_opensearch/blob/3.0.0/test/outputs/guide_searching_parse_error.txt"><img align="right" alt="Tested snippet" src="https://img.shields.io/badge/%F0%9F%A7%AA_tested-snippet-lightgreen.svg?style=flat-square"></a>
 
 ```text
 {"error":{"root_cause":[{"type":"parsing_exception","reason":"unknown query [matches] did you mean any of [match, match_all]?","line":1,"col":21}],"type":"parsing_exception","reason":"unknown query [matches] did you mean any of [match, match_all]?","line":1,"col":21,"caused_by":{"type":"named_object_not_found_exception","reason":"[1:21] unknown field [matches]"}},"status":400}
@@ -346,8 +362,11 @@ The search module also has two parts that you can test with no cluster at all:
 
 Add `dream_test` as a dev dependency, from GitHub, with the commit that this package tests with:
 
+### The dev dependency on dream_test <a href="https://github.com/TrustBound/dream_opensearch/blob/3.0.0/gleam.toml#L27-L29"><img align="right" alt="Tested snippet" src="https://img.shields.io/badge/%F0%9F%A7%AA_tested-snippet-lightgreen.svg?style=flat-square"></a>
+
 ```toml
 [dev-dependencies]
+# Switched to a Hex version range once it is published.
 dream_test = { git = "https://github.com/TrustBound/dream_test.git", ref = "1639959578a14ae3577f8e3ae5cac058f933aa53" }
 ```
 

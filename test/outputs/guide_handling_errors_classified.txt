@@ -1,0 +1,1 @@
+Rejected(status: 404, error_type: "index_not_found_exception", reason: "no such index [books]")

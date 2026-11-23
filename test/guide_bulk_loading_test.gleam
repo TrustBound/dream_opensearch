@@ -8,22 +8,29 @@
 //// A cluster does not report how many requests it got, so the batch test
 //// that counts requests uses the local test server of
 //// `opensearch_test_server`, with bodies copied from the real cluster.
+////
+//// Each `text` block of the guide is a file in `test/outputs/`, and a test
+//// here compares it with the real output (see `guide_output`).
 
 import dream_opensearch/client.{type Client}
 import dream_opensearch/document
 import dream_test/matchers.{be_equal, or_fail_with, should}
 import dream_test/suite.{type TestSuite}
 import dream_test/unit.{describe, group, it}
+import gleam/dynamic.{type Dynamic}
 import gleam/dynamic/decode
 import gleam/http
 import gleam/json
 import gleam/list
 import gleam/result
 import gleam/string
+import guide_output
 import guide_responses
 import opensearch_cluster
 import opensearch_test_server.{Respond}
-import snippets/guide_bulk_loading_books.{type Book, Book, FailedItem}
+import snippets/guide_bulk_loading_books.{
+  type Book, type FailedItem, Book, FailedItem,
+}
 import snippets/guide_managing_indexes_create
 
 const programming_gleam =
@@ -91,6 +98,40 @@ fn huge_book(id: String) -> Book {
   Book(id:, title: string.repeat("a", 1_100_000), author: "Kim Ito", year: 2024)
 }
 
+/// The field of a response body that changes from run to run.
+const varying_fields = ["took"]
+
+/// `failed` with the field labels of `FailedItem`, as the guide shows it.
+fn labelled(failed: List(FailedItem)) -> String {
+  guide_output.lines(
+    "Ok([" <> string.join(list.map(failed, labelled_item), ", ") <> "])",
+  )
+}
+
+fn labelled_item(item: FailedItem) -> String {
+  "FailedItem(id: "
+  <> string.inspect(item.id)
+  <> ", status: "
+  <> string.inspect(item.status)
+  <> ", error_type: "
+  <> string.inspect(item.error_type)
+  <> ", reason: "
+  <> string.inspect(item.reason)
+  <> ")"
+}
+
+/// The stable fields of the answer to a bulk request with `books`, in a new
+/// index with the mapping of the managing indexes guide.
+fn bulk_answer(books: List(Book)) -> Result(Dynamic, String) {
+  use opensearch, index <- opensearch_cluster.with_index("books")
+  use Nil <- result.try(create_books_index(opensearch, index))
+  use body <- result.try(document.bulk(
+    opensearch,
+    guide_bulk_loading_books.bulk_body(index, books),
+  ))
+  guide_output.stable_body(body, index, "books", varying_fields)
+}
+
 pub fn tests() -> TestSuite {
   describe("bulk loading guide", [
     group("step 1: the bulk body", [
@@ -105,9 +146,7 @@ pub fn tests() -> TestSuite {
         // Assert
         body
         |> should
-        |> be_equal(
-          "{\"index\":{\"_index\":\"books\",\"_id\":\"1\"}}\n{\"title\":\"Programming Gleam\",\"author\":\"Jo Lee\",\"year\":2024}\n{\"index\":{\"_index\":\"books\",\"_id\":\"2\"}}\n{\"title\":\"Gleam for Erlang Developers\",\"author\":\"Sam Park\",\"year\":2022}\n",
-        )
+        |> be_equal(guide_output.file("guide_bulk_loading_bulk_body"))
         |> or_fail_with("bulk_body should match the guide")
       }),
       it("bulk_body of no books is empty", fn() {
@@ -142,6 +181,19 @@ pub fn tests() -> TestSuite {
         |> should
         |> be_equal(Ok(#([], 2)))
         |> or_fail_with("Both books should be stored")
+      }),
+      it("OpenSearch answers with one created item for each book", fn() {
+        // Act
+        let answer = bulk_answer([programming_gleam, gleam_for_erlang])
+
+        // Assert
+        answer
+        |> should
+        |> be_equal(guide_output.stable_file(
+          "guide_bulk_loading_all_stored",
+          varying_fields,
+        ))
+        |> or_fail_with("Expected the body that the guide shows")
       }),
       it("load_books creates a missing index on the first write", fn() {
         // Act
@@ -178,14 +230,30 @@ pub fn tests() -> TestSuite {
             ]),
           )
           use stored <- result.try(count(opensearch, index))
-          Ok(#(failed, stored))
+          Ok(#(labelled(failed), stored))
         }
 
         // Assert
         loaded
         |> should
-        |> be_equal(Ok(#([unparsable], 2)))
+        |> be_equal(
+          Ok(#(guide_output.file("guide_bulk_loading_failed_items"), 2)),
+        )
         |> or_fail_with("Book 3 failed, books 1 and 2 are stored")
+      }),
+      it("OpenSearch answers with status 200 and the failed item", fn() {
+        // Act
+        let answer =
+          bulk_answer([programming_gleam, gleam_for_erlang, far_future])
+
+        // Assert
+        answer
+        |> should
+        |> be_equal(guide_output.stable_file(
+          "guide_bulk_loading_one_failed",
+          varying_fields,
+        ))
+        |> or_fail_with("Expected the body that the guide shows")
       }),
       it("failed_items reads create, update and delete items too", fn() {
         // Act
@@ -355,13 +423,15 @@ pub fn tests() -> TestSuite {
             ),
           )
           use stored <- result.try(count(opensearch, index))
-          Ok(#(still_failed, stored))
+          Ok(#(labelled(still_failed), stored))
         }
 
         // Assert
         retried
         |> should
-        |> be_equal(Ok(#([unparsable], 1)))
+        |> be_equal(
+          Ok(#(guide_output.file("guide_bulk_loading_retry_result"), 1)),
+        )
         |> or_fail_with("Only book 2 goes again, book 3 stays failed")
       }),
       it("retry_rejected sends nothing when nothing was rejected", fn() {
@@ -413,10 +483,11 @@ pub fn tests() -> TestSuite {
 
         // Assert
         sent
+        |> result.map_error(guide_output.lines)
         |> should
-        |> be_equal(Error(
-          "{\"error\":{\"root_cause\":[{\"type\":\"illegal_argument_exception\",\"reason\":\"The bulk request must be terminated by a newline [\\\\n]\"}],\"type\":\"illegal_argument_exception\",\"reason\":\"The bulk request must be terminated by a newline [\\\\n]\"},\"status\":400}",
-        ))
+        |> be_equal(
+          Error(guide_output.file("guide_bulk_loading_no_final_newline")),
+        )
         |> or_fail_with("Expected the whole error body")
       }),
       it("a document over two lines fails the whole request", fn() {

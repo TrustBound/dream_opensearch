@@ -1,0 +1,2 @@
+PUT /users/_doc/123
+{"name":"Alice","email":"alice@example.com"}

@@ -12,10 +12,11 @@ pub fn create_client() -> Client {
 
 pub fn index_log_entry(
   opensearch: Client,
+  index: String,
   message: String,
 ) -> Result(String, String) {
   let document_json =
     json.object([#("message", json.string(message))])
     |> json.to_string()
-  document.index(opensearch, "logs", "doc-id-123", document_json)
+  document.index(opensearch, index, "doc-id-123", document_json)
 }

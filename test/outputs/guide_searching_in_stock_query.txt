@@ -1,0 +1,1 @@
+{"query":{"bool":{"must":[{"match":{"title":"gleam"}}],"filter":[{"term":{"in_stock":true}},{"range":{"year":{"gte":2020}}}]}},"from":0,"size":10,"sort":[{"year":{"order":"desc"}}]}

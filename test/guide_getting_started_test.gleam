@@ -2,9 +2,13 @@
 //// (docs/guides/getting-started.md), against the real OpenSearch of
 //// `opensearch_cluster`. Each test uses its own index and deletes it.
 ////
-//// Only the order of the requests of `save_and_find` is checked on the
-//// local test server of `opensearch_test_server`, because a cluster does
-//// not report the requests it got.
+//// The requests that the guide shows (request lines, bodies and the
+//// `authorization` header) are checked on the local test server of
+//// `opensearch_test_server`, because a cluster does not report the
+//// requests it got.
+////
+//// Each `text` block of the guide is a file in `test/outputs/`, and a test
+//// here compares it with the real output (see `guide_output`).
 
 import dream_opensearch/client.{type Client}
 import dream_opensearch/document
@@ -17,11 +21,12 @@ import gleam/json
 import gleam/list
 import gleam/result
 import gleam/string
+import guide_output
 import guide_responses
 import opensearch_cluster
-import opensearch_test_server.{Respond}
+import opensearch_test_server.{type TestServer, Respond}
 import snippets/guide_getting_started_connect
-import snippets/guide_getting_started_user_store.{User}
+import snippets/guide_getting_started_user_store.{type User, User}
 
 const alice = User(id: "123", name: "Alice", email: "alice@example.com")
 
@@ -59,6 +64,35 @@ fn field_type(
   |> result.replace_error("Unexpected mapping: " <> body)
 }
 
+/// The fields of a response body that change from run to run.
+const varying_fields = ["took", "max_score", "_score"]
+
+/// The next request that `server` got, as the guide shows a request.
+fn captured_request(server: TestServer) -> Result(String, Nil) {
+  use request <- result.map(opensearch_test_server.await_request(server))
+  guide_output.request(request.method, request.target, request.body)
+}
+
+/// `found` with the field labels of `User`, as the guide shows it.
+fn labelled_users(found: Result(List(User), String)) -> String {
+  case found {
+    Ok(users) ->
+      "Ok([" <> string.join(list.map(users, labelled_user), ", ") <> "])"
+    Error(message) -> "Error(" <> string.inspect(message) <> ")"
+  }
+  |> guide_output.lines
+}
+
+fn labelled_user(user: User) -> String {
+  "User(id: "
+  <> string.inspect(user.id)
+  <> ", name: "
+  <> string.inspect(user.name)
+  <> ", email: "
+  <> string.inspect(user.email)
+  <> ")"
+}
+
 fn create_empty_index(
   opensearch: Client,
   index: String,
@@ -92,9 +126,40 @@ pub fn tests() -> TestSuite {
         // Assert
         opensearch
         |> result.map(base_url)
+        |> result.map(guide_output.lines)
         |> should
-        |> be_equal(Ok("https://admin:p%40ss%3Aw%2Frd@search.example.com:9200"))
+        |> be_equal(Ok(guide_output.file("guide_getting_started_secured_url")))
         |> or_fail_with("The password should be percent-encoded")
+      }),
+      it("secured_client sends the user name and password in Base64", fn() {
+        // Arrange
+        let server = opensearch_test_server.start(Respond(201, "{}"))
+        let assert Ok(opensearch) =
+          guide_getting_started_connect.secured_client(
+            opensearch_test_server.base_url(server),
+            "admin",
+            "p@ss:w/rd",
+          )
+
+        // Act
+        let _saved =
+          guide_getting_started_user_store.save_user(opensearch, "users", alice)
+        let sent = {
+          use request <- result.map(opensearch_test_server.await_request(server))
+          opensearch_test_server.header_values(request, "authorization")
+          |> list.map(fn(value) {
+            guide_output.lines("authorization: " <> value)
+          })
+          |> string.concat
+        }
+
+        // Assert
+        sent
+        |> should
+        |> be_equal(
+          Ok(guide_output.file("guide_getting_started_authorization")),
+        )
+        |> or_fail_with("Expected one Basic header for admin:p@ss:w/rd")
       }),
       it("secured_client saves a user on a secured cluster", fn() {
         // Arrange
@@ -160,6 +225,48 @@ pub fn tests() -> TestSuite {
       }),
     ]),
     group("step 2: save a user", [
+      it("save_user sends the user to PUT /<index>/_doc/<id>", fn() {
+        // Arrange
+        let server =
+          opensearch_test_server.start(Respond(
+            201,
+            guide_responses.user_indexed,
+          ))
+        let opensearch = client.new(opensearch_test_server.base_url(server))
+
+        // Act
+        let _saved =
+          guide_getting_started_user_store.save_user(opensearch, "users", alice)
+        let sent = captured_request(server)
+
+        // Assert
+        sent
+        |> should
+        |> be_equal(Ok(guide_output.file("guide_getting_started_save_request")))
+        |> or_fail_with("Expected the request that the guide shows")
+      }),
+      it("OpenSearch answers the first save with result created", fn() {
+        // Act
+        let answer = {
+          use opensearch, index <- opensearch_cluster.with_index("users")
+          use body <- result.try(document.index(
+            opensearch,
+            index,
+            "123",
+            "{\"name\":\"Alice\",\"email\":\"alice@example.com\"}",
+          ))
+          guide_output.stable_body(body, index, "users", varying_fields)
+        }
+
+        // Assert
+        answer
+        |> should
+        |> be_equal(guide_output.stable_file(
+          "guide_getting_started_save_response",
+          varying_fields,
+        ))
+        |> or_fail_with("Expected the body that the guide shows")
+      }),
       it("save_user creates the index on the first write", fn() {
         // Act
         let stored = {
@@ -247,9 +354,63 @@ pub fn tests() -> TestSuite {
 
         // Assert
         found
+        |> labelled_users
         |> should
-        |> be_equal(Ok([alice]))
+        |> be_equal(guide_output.file("guide_getting_started_found_users"))
         |> or_fail_with("alice should match Alice")
+      }),
+      it("find_users_by_name sends a match query to the search endpoint", fn() {
+        // Arrange
+        let server =
+          opensearch_test_server.start(Respond(200, guide_responses.alice_found))
+        let opensearch = client.new(opensearch_test_server.base_url(server))
+
+        // Act
+        let _found =
+          guide_getting_started_user_store.find_users_by_name(
+            opensearch,
+            "users",
+            "alice",
+          )
+        let sent = captured_request(server)
+
+        // Assert
+        sent
+        |> should
+        |> be_equal(
+          Ok(guide_output.file("guide_getting_started_search_request")),
+        )
+        |> or_fail_with("Expected the request that the guide shows")
+      }),
+      it("OpenSearch answers the search with Alice under hits.hits", fn() {
+        // Act
+        let answer = {
+          use opensearch, index <- opensearch_cluster.with_index("users")
+          use Nil <- result.try(guide_getting_started_user_store.save_user(
+            opensearch,
+            index,
+            alice,
+          ))
+          use Nil <- result.try(guide_getting_started_user_store.refresh(
+            opensearch,
+            index,
+          ))
+          use body <- result.try(document.search(
+            opensearch,
+            index,
+            "{\"query\":{\"match\":{\"name\":\"alice\"}}}",
+          ))
+          guide_output.stable_body(body, index, "users", varying_fields)
+        }
+
+        // Assert
+        answer
+        |> should
+        |> be_equal(guide_output.stable_file(
+          "guide_getting_started_search_response",
+          varying_fields,
+        ))
+        |> or_fail_with("Expected the body that the guide shows")
       }),
       it("find_users_by_name returns the 404 of a missing index", fn() {
         // Act
@@ -329,6 +490,40 @@ pub fn tests() -> TestSuite {
         |> be_equal(Ok(Error(Ok(#("not_found", 1)))))
         |> or_fail_with("The 404 body has result not_found")
       }),
+      it(
+        "a delete after two saves and a delete is not_found at version 4",
+        fn() {
+          // Act
+          let answer = {
+            use opensearch, index <- opensearch_cluster.with_index("users")
+            use Nil <- result.try(guide_getting_started_user_store.save_user(
+              opensearch,
+              index,
+              alice,
+            ))
+            use Nil <- result.try(guide_getting_started_user_store.save_user(
+              opensearch,
+              index,
+              alice,
+            ))
+            use _deleted <- result.try(document.delete(opensearch, index, "123"))
+            case document.delete(opensearch, index, "123") {
+              Ok(body) -> Error("Expected a 404, got: " <> body)
+              Error(body) ->
+                guide_output.stable_body(body, index, "users", varying_fields)
+            }
+          }
+
+          // Assert
+          answer
+          |> should
+          |> be_equal(guide_output.stable_file(
+            "guide_getting_started_delete_not_found",
+            varying_fields,
+          ))
+          |> or_fail_with("Expected the body that the guide shows")
+        },
+      ),
       it("delete_user accepts a user that is not there", fn() {
         // Act
         let deleted = {
@@ -379,12 +574,17 @@ pub fn tests() -> TestSuite {
       }),
       it("main prints the result of save_and_find like this", fn() {
         // Act
-        let printed = string.inspect(Ok([alice]))
+        let printed = {
+          use opensearch, index <- opensearch_cluster.with_index("users")
+          guide_getting_started_user_store.save_and_find(opensearch, index)
+          |> guide_output.inspected
+          |> Ok
+        }
 
         // Assert
         printed
         |> should
-        |> be_equal("Ok([User(\"123\", \"Alice\", \"alice@example.com\")])")
+        |> be_equal(Ok(guide_output.file("guide_getting_started_main_output")))
         |> or_fail_with("string.inspect should leave out the labels")
       }),
       it("save_and_find saves, refreshes and searches, in that order", fn() {
@@ -405,17 +605,18 @@ pub fn tests() -> TestSuite {
         [server, server, server]
         |> list.map(opensearch_test_server.await_request)
         |> result.all
-        |> result.map(list.map(_, opensearch_test_server.request_line))
-        |> result.map(fn(requests) { #(found, requests) })
+        |> result.map(
+          list.map(_, fn(request) {
+            guide_output.request(request.method, request.target, "")
+          }),
+        )
+        |> result.map(fn(requests) { #(found, string.concat(requests)) })
         |> should
         |> be_equal(
-          Ok(
-            #(Ok([alice]), [
-              #("PUT", "/users/_doc/123"),
-              #("POST", "/users/_refresh"),
-              #("POST", "/users/_search"),
-            ]),
-          ),
+          Ok(#(
+            Ok([alice]),
+            guide_output.file("guide_getting_started_save_and_find_requests"),
+          )),
         )
         |> or_fail_with("Expected save, refresh, search")
       }),

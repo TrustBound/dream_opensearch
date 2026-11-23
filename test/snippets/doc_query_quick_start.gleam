@@ -5,13 +5,19 @@ import dream_opensearch/document
 import dream_opensearch/query
 
 // Full-text search
-pub fn search_by_name(opensearch: Client) -> Result(String, String) {
+pub fn search_by_name(
+  opensearch: Client,
+  index: String,
+) -> Result(String, String) {
   let name_query = query.match("name", "Alice")
-  document.search(opensearch, "users", name_query)
+  document.search(opensearch, index, name_query)
 }
 
 // Exact term match
-pub fn search_by_status(opensearch: Client) -> Result(String, String) {
+pub fn search_by_status(
+  opensearch: Client,
+  index: String,
+) -> Result(String, String) {
   let status_query = query.term("status", "active")
-  document.search(opensearch, "users", status_query)
+  document.search(opensearch, index, status_query)
 }

@@ -20,6 +20,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `send_request` returns `Error("The OpenSearch response body is not valid UTF-8")` for a response body that is not UTF-8, with any status. dream_http_client 6.0.0 gives the body as bytes, and this package returns text. Before, such a body came back as a `String` that was not valid text.
 - `send_request` returns an error, and sends no request, when the URL cannot be parsed, has no host, or has invalid percent-encoding in the user name or password (for example `"Invalid OpenSearch URL: the URL has no host"`). Before, it tried to connect and returned a connection error. No error message contains the user name or password.
 - The tests run against a real OpenSearch 2.19.1 in Docker (`make search-up`), locally and in CI.
+- The examples in the doc comments take the index name as a parameter, and their tests run against the real cluster, each in its own index.
+- Every code block of the guides is checked: each output block is a file in `test/outputs/` that a test compares with the real output, and each file and command block is a copy of `docker-compose.yml`, `gleam.toml` or a script in `scripts/`.
 - The package has five guides in `docs/guides/`: getting started, searching an index, loading documents in bulk, managing indexes, and handling errors. Each one walks through a task from start to finish, with tested code, the failure cases, tests for your own code and common pitfalls. The README is short and links to them, and HexDocs shows the guides.
 
 ### Upgrading

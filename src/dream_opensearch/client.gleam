@@ -6,7 +6,7 @@
 ////
 //// ## Quick Start
 ////
-//// ### Create a client and index a document <a href="https://github.com/TrustBound/dream_opensearch/blob/3.0.0/test/snippets/doc_client_quick_start.gleam#L3-L12"><img align="right" alt="Tested snippet" src="https://img.shields.io/badge/%F0%9F%A7%AA_tested-snippet-lightgreen.svg?style=flat-square"></a>
+//// ### Create a client and index a document <a href="https://github.com/TrustBound/dream_opensearch/blob/3.0.0/test/snippets/doc_client_quick_start.gleam#L3-L15"><img align="right" alt="Tested snippet" src="https://img.shields.io/badge/%F0%9F%A7%AA_tested-snippet-lightgreen.svg?style=flat-square"></a>
 ////
 //// ```gleam
 //// import dream_opensearch/client.{type Client}
@@ -16,8 +16,11 @@
 ////   client.new("http://localhost:9200")
 //// }
 ////
-//// pub fn index_alice(opensearch: Client) -> Result(String, String) {
-////   document.index(opensearch, "users", "123", "{\"name\":\"Alice\"}")
+//// pub fn index_alice(
+////   opensearch: Client,
+////   index: String,
+//// ) -> Result(String, String) {
+////   document.index(opensearch, index, "123", "{\"name\":\"Alice\"}")
 //// }
 //// ```
 ////
@@ -174,8 +177,8 @@ pub fn new(base_url: String) -> Client {
 /// import dream_opensearch/client.{type Client}
 /// import gleam/http
 ///
-/// pub fn get_user(opensearch: Client) -> Result(String, String) {
-///   client.send_request(opensearch, http.Get, "/users/_doc/123", "")
+/// pub fn get_user(opensearch: Client, index: String) -> Result(String, String) {
+///   client.send_request(opensearch, http.Get, "/" <> index <> "/_doc/123", "")
 /// }
 /// ```
 pub fn send_request(

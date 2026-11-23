@@ -2,6 +2,12 @@
 //// (docs/guides/searching.md), against the real OpenSearch of
 //// `opensearch_cluster`. Each test creates its own index with the mapping
 //// of the managing indexes guide, loads three books, and deletes the index.
+////
+//// Each `text` block of the guide is a file in `test/outputs/`, and a test
+//// here compares it with the real output (see `guide_output`). The
+//// requests are checked on the local test server of
+//// `opensearch_test_server`, because a cluster does not report the
+//// requests it got.
 
 import dream_opensearch/client.{type Client}
 import dream_opensearch/document
@@ -9,11 +15,16 @@ import dream_opensearch/query
 import dream_test/matchers.{be_equal, or_fail_with, should}
 import dream_test/suite.{type TestSuite}
 import dream_test/unit.{describe, group, it}
+import gleam/list
 import gleam/result
 import gleam/string
+import guide_output
 import opensearch_cluster
+import opensearch_test_server.{Respond}
 import snippets/guide_managing_indexes_create
-import snippets/guide_searching_books.{type SearchResult, Book, SearchResult}
+import snippets/guide_searching_books.{
+  type Book, type SearchResult, Book, SearchResult,
+}
 import snippets/guide_searching_bool
 
 const programming_gleam =
@@ -57,8 +68,8 @@ fn books_ndjson(index: String) -> String {
 
 /// Runs `search` on a new index that holds the three books.
 fn with_books(
-  search: fn(Client, String) -> Result(SearchResult, String),
-) -> Result(Result(SearchResult, String), String) {
+  search: fn(Client, String) -> Result(value, String),
+) -> Result(Result(value, String), String) {
   use opensearch, index <- opensearch_cluster.with_index("books")
   use Nil <- result.try(guide_managing_indexes_create.create_books_index(
     opensearch,
@@ -67,6 +78,52 @@ fn with_books(
   use _ <- result.try(document.bulk(opensearch, books_ndjson(index)))
   use Nil <- result.try(opensearch_cluster.refresh(opensearch, index))
   Ok(search(opensearch, index))
+}
+
+/// The fields of a response body that change from run to run.
+const varying_fields = ["took", "max_score", "_score"]
+
+/// An empty search response, for the local test server.
+const no_hits = "{\"hits\":{\"total\":{\"value\":0},\"hits\":[]}}"
+
+/// The request that `search` sends, as the guide shows a request. The
+/// local test server answers it with no hits.
+fn sent_request(
+  search: fn(Client) -> Result(SearchResult, String),
+) -> Result(String, Nil) {
+  let server = opensearch_test_server.start(Respond(200, no_hits))
+  let _found = search(client.new(opensearch_test_server.base_url(server)))
+  use request <- result.map(opensearch_test_server.await_request(server))
+  guide_output.request(request.method, request.target, request.body)
+}
+
+/// `found` with the field labels of `SearchResult` and `Book`, as the guide
+/// shows it.
+fn labelled(found: Result(SearchResult, String)) -> String {
+  case found {
+    Ok(SearchResult(total:, books:)) ->
+      "Ok(SearchResult(total: "
+      <> string.inspect(total)
+      <> ", books: ["
+      <> string.join(list.map(books, labelled_book), ", ")
+      <> "]))"
+    Error(message) -> "Error(" <> string.inspect(message) <> ")"
+  }
+  |> guide_output.lines
+}
+
+fn labelled_book(book: Book) -> String {
+  "Book(id: "
+  <> string.inspect(book.id)
+  <> ", title: "
+  <> string.inspect(book.title)
+  <> ", author: "
+  <> string.inspect(book.author)
+  <> ", year: "
+  <> string.inspect(book.year)
+  <> ", in_stock: "
+  <> string.inspect(book.in_stock)
+  <> ")"
 }
 
 pub fn tests() -> TestSuite {
@@ -81,18 +138,43 @@ pub fn tests() -> TestSuite {
 
         // Assert
         found
+        |> result.map(labelled)
         |> should
-        |> be_equal(
-          Ok(
-            Ok(
-              SearchResult(total: 2, books: [
-                programming_gleam,
-                gleam_for_erlang,
-              ]),
-            ),
-          ),
-        )
+        |> be_equal(Ok(guide_output.file("guide_searching_books_about")))
         |> or_fail_with("gleam should match both Gleam titles")
+      }),
+      it("books_about sends a match query on the title", fn() {
+        // Act
+        let sent =
+          sent_request(guide_searching_books.books_about(_, "books", "gleam"))
+
+        // Assert
+        sent
+        |> should
+        |> be_equal(Ok(guide_output.file("guide_searching_match_request")))
+        |> or_fail_with("Expected the request that the guide shows")
+      }),
+      it("OpenSearch answers the match query with both Gleam books", fn() {
+        // Act
+        let answer =
+          with_books(fn(opensearch, index) {
+            use body <- result.try(document.search(
+              opensearch,
+              index,
+              query.match("title", "gleam"),
+            ))
+            guide_output.stable_body(body, index, "books", varying_fields)
+          })
+          |> result.flatten
+
+        // Assert
+        answer
+        |> should
+        |> be_equal(guide_output.stable_file(
+          "guide_searching_match_response",
+          varying_fields,
+        ))
+        |> or_fail_with("Expected the body that the guide shows")
       }),
       it("books_about with no match is an empty result", fn() {
         // Act
@@ -109,6 +191,17 @@ pub fn tests() -> TestSuite {
       }),
     ]),
     group("step 2: term", [
+      it("books_by sends a term query on the author", fn() {
+        // Act
+        let sent =
+          sent_request(guide_searching_books.books_by(_, "books", "Jo Lee"))
+
+        // Assert
+        sent
+        |> should
+        |> be_equal(Ok(guide_output.file("guide_searching_term_request")))
+        |> or_fail_with("Expected the request that the guide shows")
+      }),
       it("books_by finds the books of one author", fn() {
         // Act
         let found =
@@ -177,6 +270,22 @@ pub fn tests() -> TestSuite {
       }),
     ]),
     group("step 3: range", [
+      it("books_published_between sends a range query on the year", fn() {
+        // Act
+        let sent =
+          sent_request(guide_searching_books.books_published_between(
+            _,
+            "books",
+            2020,
+            2024,
+          ))
+
+        // Assert
+        sent
+        |> should
+        |> be_equal(Ok(guide_output.file("guide_searching_range_request")))
+        |> or_fail_with("Expected the request that the guide shows")
+      }),
       it("books_published_between includes both bounds", fn() {
         // Act
         let found =
@@ -212,11 +321,9 @@ pub fn tests() -> TestSuite {
           guide_searching_bool.in_stock_query("gleam", 2020, 1, 10)
 
         // Assert
-        query_json
+        guide_output.lines(query_json)
         |> should
-        |> be_equal(
-          "{\"query\":{\"bool\":{\"must\":[{\"match\":{\"title\":\"gleam\"}}],\"filter\":[{\"term\":{\"in_stock\":true}},{\"range\":{\"year\":{\"gte\":2020}}}]}},\"from\":0,\"size\":10,\"sort\":[{\"year\":{\"order\":\"desc\"}}]}",
-        )
+        |> be_equal(guide_output.file("guide_searching_in_stock_query"))
         |> or_fail_with("Expected the bool query of the guide")
       }),
       it("in_stock_query finds the Gleam book in stock from 2020 on", fn() {
@@ -260,15 +367,20 @@ pub fn tests() -> TestSuite {
         // Act
         let found = {
           use opensearch, index <- opensearch_cluster.with_index("books")
-          guide_searching_books.books_about(opensearch, index, "gleam")
-          |> result.map_error(opensearch_cluster.error_type_and_status)
-          |> Ok
+          case guide_searching_books.books_about(opensearch, index, "gleam") {
+            Ok(_) -> Error("Expected a 404 for a missing index")
+            Error(body) ->
+              guide_output.stable_body(body, index, "books", varying_fields)
+          }
         }
 
         // Assert
         found
         |> should
-        |> be_equal(Ok(Error(Ok(#("index_not_found_exception", 404)))))
+        |> be_equal(guide_output.stable_file(
+          "guide_searching_missing_index",
+          varying_fields,
+        ))
         |> or_fail_with("Expected the index_not_found_exception body")
       }),
       it("a query OpenSearch cannot parse comes back as its 400 body", fn() {
@@ -281,15 +393,21 @@ pub fn tests() -> TestSuite {
               "{\"query\":{\"matches\":{\"title\":\"gleam\"}}}",
             )
           })
-          |> result.map(result.map_error(
-            _,
-            opensearch_cluster.error_type_and_status,
-          ))
+          |> result.map(fn(searched) {
+            case searched {
+              Ok(_) -> Error("Expected a 400 for a misspelled query")
+              Error(body) -> guide_output.stable_json(body, varying_fields)
+            }
+          })
+          |> result.flatten
 
         // Assert
         found
         |> should
-        |> be_equal(Ok(Error(Ok(#("parsing_exception", 400)))))
+        |> be_equal(guide_output.stable_file(
+          "guide_searching_parse_error",
+          varying_fields,
+        ))
         |> or_fail_with("Expected the parsing_exception body")
       }),
       it("a hit without a year is an unexpected response", fn() {

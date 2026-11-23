@@ -5,6 +5,11 @@
 //// A real cluster always sends `count` and `created`, so the two tests of
 //// a body with neither use the local test server of
 //// `opensearch_test_server`, with a real refresh response as the body.
+////
+//// Each `text` block of the guide is a file in `test/outputs/`, and a test
+//// here compares it with the real output (see `guide_output`). The request
+//// of `copy_index` is checked on the local test server too, because a
+//// cluster does not report the requests it got.
 
 import dream_opensearch/client.{type Client}
 import dream_opensearch/document
@@ -12,10 +17,13 @@ import dream_opensearch/query
 import dream_test/matchers.{be_equal, or_fail_with, should}
 import dream_test/suite.{type TestSuite}
 import dream_test/unit.{describe, group, it}
+import gleam/dynamic.{type Dynamic}
 import gleam/dynamic/decode
 import gleam/http
 import gleam/json
 import gleam/result
+import gleam/string
+import guide_output
 import guide_responses
 import opensearch_cluster
 import opensearch_test_server.{Respond}
@@ -50,19 +58,39 @@ fn create_and_load(opensearch: Client, index: String) -> Result(Nil, String) {
   guide_managing_indexes_maintain.refresh_index(opensearch, index)
 }
 
-fn created_body(body: String) -> Result(#(Bool, Bool), String) {
-  let decoder = {
-    use acknowledged <- decode.field("acknowledged", decode.bool)
-    use shards_acknowledged <- decode.field("shards_acknowledged", decode.bool)
-    decode.success(#(acknowledged, shards_acknowledged))
-  }
-  json.parse(body, decoder)
-  |> result.replace_error("Unexpected create response: " <> body)
-}
-
 fn hit_total(body: String) -> Result(Int, String) {
   json.parse(body, decode.at(["hits", "total", "value"], decode.int))
   |> result.replace_error("Unexpected search response: " <> body)
+}
+
+/// The field of a response body that changes from run to run.
+const varying_fields = ["took"]
+
+/// `body` with its index UUID, which changes from run to run, written as
+/// `<index UUID>`. A body with no `error.index_uuid` stays as it is.
+fn without_index_uuid(body: String) -> String {
+  case json.parse(body, decode.at(["error", "index_uuid"], decode.string)) {
+    Ok(uuid) -> string.replace(body, uuid, "<index UUID>")
+    Error(_) -> body
+  }
+}
+
+/// The stable fields of a body from the index `index` of a test.
+fn stable_body(body: String, index: String) -> Result(Dynamic, String) {
+  guide_output.stable_body(
+    without_index_uuid(body),
+    index,
+    "books",
+    varying_fields,
+  )
+}
+
+/// The stable fields of the output file `name`.
+fn stable_file(name: String) -> Result(Dynamic, String) {
+  guide_output.stable_json(
+    without_index_uuid(guide_output.file(name)),
+    varying_fields,
+  )
 }
 
 pub fn tests() -> TestSuite {
@@ -73,11 +101,9 @@ pub fn tests() -> TestSuite {
         let body = guide_managing_indexes_create.books_index_body()
 
         // Assert
-        body
+        guide_output.lines(body)
         |> should
-        |> be_equal(
-          "{\"settings\":{\"number_of_shards\":1,\"number_of_replicas\":1},\"mappings\":{\"dynamic\":\"strict\",\"properties\":{\"title\":{\"type\":\"text\"},\"author\":{\"type\":\"keyword\"},\"year\":{\"type\":\"integer\"},\"in_stock\":{\"type\":\"boolean\"}}}}",
-        )
+        |> be_equal(guide_output.file("guide_managing_indexes_books_index_body"))
         |> or_fail_with("Expected the body of the guide")
       }),
       it("create_index answers acknowledged on a single node", fn() {
@@ -89,13 +115,13 @@ pub fn tests() -> TestSuite {
             index,
             guide_managing_indexes_create.books_index_body(),
           ))
-          created_body(body)
+          stable_body(body, index)
         }
 
         // Assert
         created
         |> should
-        |> be_equal(Ok(#(True, True)))
+        |> be_equal(stable_file("guide_managing_indexes_created"))
         |> or_fail_with("The primary shard starts, the replica waits")
       }),
       it("create_books_index returns an existing index as an error", fn() {
@@ -105,15 +131,18 @@ pub fn tests() -> TestSuite {
           use Nil <- result.try(
             guide_managing_indexes_create.create_books_index(opensearch, index),
           )
-          guide_managing_indexes_create.create_books_index(opensearch, index)
-          |> result.map_error(opensearch_cluster.error_type_and_status)
-          |> Ok
+          case
+            guide_managing_indexes_create.create_books_index(opensearch, index)
+          {
+            Ok(Nil) -> Error("Expected a 400 for an index that exists")
+            Error(body) -> stable_body(body, index)
+          }
         }
 
         // Assert
         created
         |> should
-        |> be_equal(Ok(Error(Ok(#("resource_already_exists_exception", 400)))))
+        |> be_equal(stable_file("guide_managing_indexes_already_exists"))
         |> or_fail_with("The second create should fail")
       }),
       it("a strict mapping refuses a field it does not name", fn() {
@@ -168,10 +197,11 @@ pub fn tests() -> TestSuite {
 
         // Assert
         ensured
+        |> result.map_error(guide_output.lines)
         |> should
-        |> be_equal(Error(
-          "{\"error\":{\"root_cause\":[{\"type\":\"invalid_index_name_exception\",\"reason\":\"Invalid index name [Books], must be lowercase\",\"index\":\"Books\",\"index_uuid\":\"_na_\"}],\"type\":\"invalid_index_name_exception\",\"reason\":\"Invalid index name [Books], must be lowercase\",\"index\":\"Books\",\"index_uuid\":\"_na_\"},\"status\":400}",
-        ))
+        |> be_equal(
+          Error(guide_output.file("guide_managing_indexes_invalid_name")),
+        )
         |> or_fail_with("A bad name must not pass as already exists")
       }),
     ]),
@@ -316,6 +346,67 @@ pub fn tests() -> TestSuite {
         |> should
         |> be_equal(Ok(#(2, 2)))
         |> or_fail_with("Both books should be in the new index")
+      }),
+      it("copy_index sends the source and the destination to _reindex", fn() {
+        // Arrange
+        let server =
+          opensearch_test_server.start(Respond(
+            200,
+            guide_output.file("guide_managing_indexes_reindex_response"),
+          ))
+        let opensearch = client.new(opensearch_test_server.base_url(server))
+
+        // Act
+        let _copied =
+          guide_managing_indexes_maintain.copy_index(
+            opensearch,
+            "books_v1",
+            "books_v2",
+          )
+        let sent = {
+          use request <- result.map(opensearch_test_server.await_request(server))
+          guide_output.request(request.method, request.target, request.body)
+        }
+
+        // Assert
+        sent
+        |> should
+        |> be_equal(
+          Ok(guide_output.file("guide_managing_indexes_reindex_request")),
+        )
+        |> or_fail_with("Expected the request that the guide shows")
+      }),
+      it("OpenSearch answers the reindex when it has copied both books", fn() {
+        // Act
+        let answer = {
+          use opensearch, source, destination <- opensearch_cluster.with_two_indexes(
+            "books",
+          )
+          use Nil <- result.try(create_and_load(opensearch, source))
+          use Nil <- result.try(
+            guide_managing_indexes_create.create_books_index(
+              opensearch,
+              destination,
+            ),
+          )
+          use body <- result.try(client.send_request(
+            opensearch,
+            http.Post,
+            "/_reindex",
+            "{\"source\":{\"index\":\""
+              <> source
+              <> "\"},\"dest\":{\"index\":\""
+              <> destination
+              <> "\"}}",
+          ))
+          guide_output.stable_json(body, varying_fields)
+        }
+
+        // Assert
+        answer
+        |> should
+        |> be_equal(stable_file("guide_managing_indexes_reindex_response"))
+        |> or_fail_with("Expected the body that the guide shows")
       }),
       it("copy_index from a missing index is a 404", fn() {
         // Act

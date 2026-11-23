@@ -1,0 +1,1 @@
+Ok([FailedItem(id: "3", status: 400, error_type: "mapper_parsing_exception", reason: "failed to parse field [year] of type [integer] in document with id '3'. Preview of field's value: '3000000000'")])

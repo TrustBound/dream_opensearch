@@ -5,7 +5,7 @@
 ////
 //// ## Quick Start
 ////
-//// ### Create a client and index a document <a href="https://github.com/TrustBound/dream_opensearch/blob/3.0.0/test/snippets/doc_document_quick_start.gleam#L3-L18"><img align="right" alt="Tested snippet" src="https://img.shields.io/badge/%F0%9F%A7%AA_tested-snippet-lightgreen.svg?style=flat-square"></a>
+//// ### Create a client and index a document <a href="https://github.com/TrustBound/dream_opensearch/blob/3.0.0/test/snippets/doc_document_quick_start.gleam#L3-L21"><img align="right" alt="Tested snippet" src="https://img.shields.io/badge/%F0%9F%A7%AA_tested-snippet-lightgreen.svg?style=flat-square"></a>
 ////
 //// ```gleam
 //// import dream_opensearch/client.{type Client}
@@ -16,13 +16,16 @@
 ////   client.new("http://localhost:9200")
 //// }
 ////
-//// pub fn index_alice(opensearch: Client) -> Result(String, String) {
+//// pub fn index_alice(
+////   opensearch: Client,
+////   index: String,
+//// ) -> Result(String, String) {
 ////   let user =
 ////     json.object([
 ////       #("name", json.string("Alice")),
 ////       #("email", json.string("alice@example.com")),
 ////     ])
-////   document.index(opensearch, "users", "123", json.to_string(user))
+////   document.index(opensearch, index, "123", json.to_string(user))
 //// }
 //// ```
 ////
@@ -87,14 +90,14 @@ import gleam/string
 /// import dream_opensearch/document
 /// import gleam/json
 ///
-/// pub fn index_alice(opensearch: Client) -> String {
+/// pub fn index_alice(opensearch: Client, index: String) -> String {
 ///   let user =
 ///     json.object([
 ///       #("name", json.string("Alice")),
 ///       #("email", json.string("alice@example.com")),
 ///     ])
 ///
-///   case document.index(opensearch, "users", "123", json.to_string(user)) {
+///   case document.index(opensearch, index, "123", json.to_string(user)) {
 ///     Ok(_response) -> "Indexed successfully"
 ///     Error(message) -> "Error: " <> message
 ///   }
@@ -139,16 +142,19 @@ pub fn index(
 ///
 /// ## Example
 ///
-/// ### Search an index <a href="https://github.com/TrustBound/dream_opensearch/blob/3.0.0/test/snippets/doc_document_search.gleam#L3-L10"><img align="right" alt="Tested snippet" src="https://img.shields.io/badge/%F0%9F%A7%AA_tested-snippet-lightgreen.svg?style=flat-square"></a>
+/// ### Search an index <a href="https://github.com/TrustBound/dream_opensearch/blob/3.0.0/test/snippets/doc_document_search.gleam#L3-L13"><img align="right" alt="Tested snippet" src="https://img.shields.io/badge/%F0%9F%A7%AA_tested-snippet-lightgreen.svg?style=flat-square"></a>
 ///
 /// ```gleam
 /// import dream_opensearch/client.{type Client}
 /// import dream_opensearch/document
 /// import dream_opensearch/query
 ///
-/// pub fn search_for_alice(opensearch: Client) -> Result(String, String) {
+/// pub fn search_for_alice(
+///   opensearch: Client,
+///   index: String,
+/// ) -> Result(String, String) {
 ///   let name_query = query.match("name", "Alice")
-///   document.search(opensearch, "users", name_query)
+///   document.search(opensearch, index, name_query)
 /// }
 /// ```
 pub fn search(
@@ -193,8 +199,8 @@ pub fn search(
 /// import dream_opensearch/client.{type Client}
 /// import dream_opensearch/document
 ///
-/// pub fn delete_user(opensearch: Client) -> String {
-///   case document.delete(opensearch, "users", "123") {
+/// pub fn delete_user(opensearch: Client, index: String) -> String {
+///   case document.delete(opensearch, index, "123") {
 ///     Ok(_response) -> "Document deleted"
 ///     Error(message) -> "Error: " <> message
 ///   }
@@ -237,14 +243,17 @@ pub fn delete(
 ///
 /// ## Example
 ///
-/// ### Create an index with a mapping <a href="https://github.com/TrustBound/dream_opensearch/blob/3.0.0/test/snippets/doc_document_create_index.gleam#L3-L24"><img align="right" alt="Tested snippet" src="https://img.shields.io/badge/%F0%9F%A7%AA_tested-snippet-lightgreen.svg?style=flat-square"></a>
+/// ### Create an index with a mapping <a href="https://github.com/TrustBound/dream_opensearch/blob/3.0.0/test/snippets/doc_document_create_index.gleam#L3-L27"><img align="right" alt="Tested snippet" src="https://img.shields.io/badge/%F0%9F%A7%AA_tested-snippet-lightgreen.svg?style=flat-square"></a>
 ///
 /// ```gleam
 /// import dream_opensearch/client.{type Client}
 /// import dream_opensearch/document
 /// import gleam/json
 ///
-/// pub fn create_users_index(opensearch: Client) -> Result(String, String) {
+/// pub fn create_users_index(
+///   opensearch: Client,
+///   index: String,
+/// ) -> Result(String, String) {
 ///   let mapping =
 ///     json.object([
 ///       #(
@@ -260,7 +269,7 @@ pub fn delete(
 ///         ]),
 ///       ),
 ///     ])
-///   document.create_index(opensearch, "users", json.to_string(mapping))
+///   document.create_index(opensearch, index, json.to_string(mapping))
 /// }
 /// ```
 pub fn create_index(
@@ -305,8 +314,8 @@ pub fn create_index(
 /// import dream_opensearch/client.{type Client}
 /// import dream_opensearch/document
 ///
-/// pub fn delete_old_index(opensearch: Client) -> String {
-///   case document.delete_index(opensearch, "old_index") {
+/// pub fn delete_old_index(opensearch: Client, index: String) -> String {
+///   case document.delete_index(opensearch, index) {
 ///     Ok(_response) -> "Index deleted"
 ///     Error(message) -> "Error: " <> message
 ///   }
@@ -347,18 +356,25 @@ pub fn delete_index(
 ///
 /// ## Example
 ///
-/// ### Index two documents in one request <a href="https://github.com/TrustBound/dream_opensearch/blob/3.0.0/test/snippets/doc_document_bulk.gleam#L3-L15"><img align="right" alt="Tested snippet" src="https://img.shields.io/badge/%F0%9F%A7%AA_tested-snippet-lightgreen.svg?style=flat-square"></a>
+/// ### Index two documents in one request <a href="https://github.com/TrustBound/dream_opensearch/blob/3.0.0/test/snippets/doc_document_bulk.gleam#L3-L22"><img align="right" alt="Tested snippet" src="https://img.shields.io/badge/%F0%9F%A7%AA_tested-snippet-lightgreen.svg?style=flat-square"></a>
 ///
 /// ```gleam
 /// import dream_opensearch/client.{type Client}
 /// import dream_opensearch/document
 ///
-/// pub fn bulk_index_users(opensearch: Client) -> Result(String, String) {
+/// pub fn bulk_index_users(
+///   opensearch: Client,
+///   index: String,
+/// ) -> Result(String, String) {
 ///   // NDJSON format: action and document on alternating lines
 ///   let ndjson =
-///     "{ \"index\": { \"_index\": \"users\", \"_id\": \"1\" } }\n"
+///     "{ \"index\": { \"_index\": \""
+///     <> index
+///     <> "\", \"_id\": \"1\" } }\n"
 ///     <> "{ \"name\": \"Alice\", \"email\": \"alice@example.com\" }\n"
-///     <> "{ \"index\": { \"_index\": \"users\", \"_id\": \"2\" } }\n"
+///     <> "{ \"index\": { \"_index\": \""
+///     <> index
+///     <> "\", \"_id\": \"2\" } }\n"
 ///     <> "{ \"name\": \"Bob\", \"email\": \"bob@example.com\" }\n"
 ///
 ///   document.bulk(opensearch, ndjson)

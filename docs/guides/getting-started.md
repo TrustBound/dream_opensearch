@@ -43,6 +43,8 @@ You also need a cluster. The examples use a cluster on `http://localhost:9200`, 
 
 The quickest cluster for development is OpenSearch in Docker. This is the service that the tests of dream_opensearch run against, from the `docker-compose.yml` of the package:
 
+### The OpenSearch service of the tests <a href="https://github.com/TrustBound/dream_opensearch/blob/3.0.0/docker-compose.yml#L16-L33"><img align="right" alt="Tested snippet" src="https://img.shields.io/badge/%F0%9F%A7%AA_tested-snippet-lightgreen.svg?style=flat-square"></a>
+
 ```yaml
 services:
   opensearch:
@@ -65,6 +67,8 @@ services:
 ```
 
 Put it in a `docker-compose.yml` file and start it. `--wait` returns when the health check passes, which took about 15 seconds on our machine:
+
+### Start the cluster <a href="https://github.com/TrustBound/dream_opensearch/blob/3.0.0/scripts/search-up.sh#L9"><img align="right" alt="Tested snippet" src="https://img.shields.io/badge/%F0%9F%A7%AA_tested-snippet-lightgreen.svg?style=flat-square"></a>
 
 ```sh
 docker compose up -d --wait opensearch
@@ -150,11 +154,15 @@ A secured cluster wants a user name and password on each request. The client tak
 
 A password often holds characters that have a meaning in a URL, such as `@`, `:` or `/`. `secured_client` percent-encodes the user name and the password, and the client decodes them again before it builds the header. For example, `secured_client("https://search.example.com:9200", "admin", "p@ss:w/rd")` gives a client with this base URL:
 
+### The base URL of the secured client <a href="https://github.com/TrustBound/dream_opensearch/blob/3.0.0/test/outputs/guide_getting_started_secured_url.txt"><img align="right" alt="Tested snippet" src="https://img.shields.io/badge/%F0%9F%A7%AA_tested-snippet-lightgreen.svg?style=flat-square"></a>
+
 ```text
 https://admin:p%40ss%3Aw%2Frd@search.example.com:9200
 ```
 
 Each request from that client sends this header, which is `admin:p@ss:w/rd` in Base64:
+
+### The authorization header <a href="https://github.com/TrustBound/dream_opensearch/blob/3.0.0/test/outputs/guide_getting_started_authorization.txt"><img align="right" alt="Tested snippet" src="https://img.shields.io/badge/%F0%9F%A7%AA_tested-snippet-lightgreen.svg?style=flat-square"></a>
 
 ```text
 authorization: Basic YWRtaW46cEBzczp3L3Jk
@@ -212,12 +220,16 @@ The import list holds what all the steps of this guide need, so you can add the 
 
 Every function of the module takes the client and the name of the index, so your program and your tests can use different indexes. `save_user(opensearch, "users", User(id: "123", name: "Alice", email: "alice@example.com"))` sends this request:
 
+### The request of save_user <a href="https://github.com/TrustBound/dream_opensearch/blob/3.0.0/test/outputs/guide_getting_started_save_request.txt"><img align="right" alt="Tested snippet" src="https://img.shields.io/badge/%F0%9F%A7%AA_tested-snippet-lightgreen.svg?style=flat-square"></a>
+
 ```text
 PUT /users/_doc/123
 {"name":"Alice","email":"alice@example.com"}
 ```
 
 The ID goes in the path, and it is not part of the document body. `document.index` percent-encodes the index name and the ID, so an ID such as `a/b` or `a#b` stays one ID. OpenSearch answers with status 201 and this body:
+
+### The answer to a new document <a href="https://github.com/TrustBound/dream_opensearch/blob/3.0.0/test/outputs/guide_getting_started_save_response.txt"><img align="right" alt="Tested snippet" src="https://img.shields.io/badge/%F0%9F%A7%AA_tested-snippet-lightgreen.svg?style=flat-square"></a>
 
 ```text
 {"_index":"users","_id":"123","_version":1,"result":"created","_shards":{"total":2,"successful":1,"failed":0},"_seq_no":0,"_primary_term":1}
@@ -264,12 +276,16 @@ fn user_hit() -> decode.Decoder(User) {
 
 `query.match("name", "alice")` builds a full-text query. `find_users_by_name(opensearch, "users", "alice")` sends it to the search endpoint of the index:
 
+### The request of find_users_by_name <a href="https://github.com/TrustBound/dream_opensearch/blob/3.0.0/test/outputs/guide_getting_started_search_request.txt"><img align="right" alt="Tested snippet" src="https://img.shields.io/badge/%F0%9F%A7%AA_tested-snippet-lightgreen.svg?style=flat-square"></a>
+
 ```text
 POST /users/_search
 {"query":{"match":{"name":"alice"}}}
 ```
 
 A match query analyzes the text first, so `alice` finds `Alice`. OpenSearch answers with the matching documents under `hits.hits`, best match first:
+
+### The answer to the search <a href="https://github.com/TrustBound/dream_opensearch/blob/3.0.0/test/outputs/guide_getting_started_search_response.txt"><img align="right" alt="Tested snippet" src="https://img.shields.io/badge/%F0%9F%A7%AA_tested-snippet-lightgreen.svg?style=flat-square"></a>
 
 ```text
 {"took":1,"timed_out":false,"_shards":{"total":1,"successful":1,"skipped":0,"failed":0},"hits":{"total":{"value":1,"relation":"eq"},"max_score":0.18232156,"hits":[{"_index":"users","_id":"123","_score":0.18232156,"_source":{"name":"Alice","email":"alice@example.com"}}]}}
@@ -278,6 +294,8 @@ A match query analyzes the text first, so `alice` finds `Alice`. OpenSearch answ
 `took` and the scores change from run to run. The decoder reads only `_id` and `_source`.
 
 Each hit has the document ID in `_id` and the document you saved in `_source`. `user_hit` reads both and builds a `User`, so the function returns:
+
+### The users that find_users_by_name returns <a href="https://github.com/TrustBound/dream_opensearch/blob/3.0.0/test/outputs/guide_getting_started_found_users.txt"><img align="right" alt="Tested snippet" src="https://img.shields.io/badge/%F0%9F%A7%AA_tested-snippet-lightgreen.svg?style=flat-square"></a>
 
 ```text
 Ok([User(id: "123", name: "Alice", email: "alice@example.com")])
@@ -316,6 +334,8 @@ fn ignore_not_found(body: String) -> Result(Nil, String) {
 `delete_user(opensearch, "users", "123")` sends `DELETE /users/_doc/123`. When the document is there, OpenSearch answers with status 200, and the function returns `Ok(Nil)`.
 
 When the document is not there, OpenSearch answers with status 404. The client returns every response with status 400 or more as `Error(body)`, so `document.delete` returns `Error` with this body:
+
+### The answer to a delete of a missing document <a href="https://github.com/TrustBound/dream_opensearch/blob/3.0.0/test/outputs/guide_getting_started_delete_not_found.txt"><img align="right" alt="Tested snippet" src="https://img.shields.io/badge/%F0%9F%A7%AA_tested-snippet-lightgreen.svg?style=flat-square"></a>
 
 ```text
 {"_index":"users","_id":"123","_version":4,"result":"not_found","_shards":{"total":2,"successful":1,"failed":0},"_seq_no":3,"_primary_term":1}
@@ -361,6 +381,8 @@ OpenSearch makes new documents visible to search at each refresh of the index, a
 
 `save_and_find(opensearch, "users")` sends three requests, in this order:
 
+### The requests of save_and_find <a href="https://github.com/TrustBound/dream_opensearch/blob/3.0.0/test/outputs/guide_getting_started_save_and_find_requests.txt"><img align="right" alt="Tested snippet" src="https://img.shields.io/badge/%F0%9F%A7%AA_tested-snippet-lightgreen.svg?style=flat-square"></a>
+
 ```text
 PUT /users/_doc/123
 POST /users/_refresh
@@ -368,6 +390,8 @@ POST /users/_search
 ```
 
 `save_and_find` returns `Ok([User(id: "123", name: "Alice", email: "alice@example.com")])`. Run the program with `gleam run`, and `main` prints that value with `string.inspect`, which leaves out the field names:
+
+### What main prints <a href="https://github.com/TrustBound/dream_opensearch/blob/3.0.0/test/outputs/guide_getting_started_main_output.txt"><img align="right" alt="Tested snippet" src="https://img.shields.io/badge/%F0%9F%A7%AA_tested-snippet-lightgreen.svg?style=flat-square"></a>
 
 ```text
 Ok([User("123", "Alice", "alice@example.com")])
@@ -413,8 +437,11 @@ The module from this guide has two kinds of code: code that talks to the cluster
 
 Add the test framework as a dev dependency. `dream_test` is not on Hex yet, so add it from GitHub, with the commit that this package tests with:
 
+### The dev dependency on dream_test <a href="https://github.com/TrustBound/dream_opensearch/blob/3.0.0/gleam.toml#L27-L29"><img align="right" alt="Tested snippet" src="https://img.shields.io/badge/%F0%9F%A7%AA_tested-snippet-lightgreen.svg?style=flat-square"></a>
+
 ```toml
 [dev-dependencies]
+# Switched to a Hex version range once it is published.
 dream_test = { git = "https://github.com/TrustBound/dream_test.git", ref = "1639959578a14ae3577f8e3ae5cac058f933aa53" }
 ```
 

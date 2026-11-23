@@ -99,11 +99,15 @@ pub fn create_books_index(
 
 `books_index_body()` returns this body:
 
+### The body of books_index_body <a href="https://github.com/TrustBound/dream_opensearch/blob/3.0.0/test/outputs/guide_managing_indexes_books_index_body.txt"><img align="right" alt="Tested snippet" src="https://img.shields.io/badge/%F0%9F%A7%AA_tested-snippet-lightgreen.svg?style=flat-square"></a>
+
 ```text
 {"settings":{"number_of_shards":1,"number_of_replicas":1},"mappings":{"dynamic":"strict","properties":{"title":{"type":"text"},"author":{"type":"keyword"},"year":{"type":"integer"},"in_stock":{"type":"boolean"}}}}
 ```
 
 `create_books_index(opensearch, "books")` sends it with `document.create_index`, as `PUT /books`. OpenSearch answers with status 200:
+
+### The answer to the create <a href="https://github.com/TrustBound/dream_opensearch/blob/3.0.0/test/outputs/guide_managing_indexes_created.txt"><img align="right" alt="Tested snippet" src="https://img.shields.io/badge/%F0%9F%A7%AA_tested-snippet-lightgreen.svg?style=flat-square"></a>
 
 ```text
 {"acknowledged":true,"shards_acknowledged":true,"index":"books"}
@@ -121,6 +125,8 @@ The index name goes in the URL path, and `document.create_index` percent-encodes
 ## Step 2: Create the index only when it is missing
 
 You want the index to exist before your program writes to it, so the natural place for `create_books_index` is the start of the program. But the second start fails: the index is already there. OpenSearch answers with status 400:
+
+### The answer when the index exists <a href="https://github.com/TrustBound/dream_opensearch/blob/3.0.0/test/outputs/guide_managing_indexes_already_exists.txt"><img align="right" alt="Tested snippet" src="https://img.shields.io/badge/%F0%9F%A7%AA_tested-snippet-lightgreen.svg?style=flat-square"></a>
 
 ```text
 {"error":{"root_cause":[{"type":"resource_already_exists_exception","reason":"index [books/szRdA72vTjirBMobGJfr3g] already exists","index":"books","index_uuid":"szRdA72vTjirBMobGJfr3g"}],"type":"resource_already_exists_exception","reason":"index [books/szRdA72vTjirBMobGJfr3g] already exists","index":"books","index_uuid":"szRdA72vTjirBMobGJfr3g"},"status":400}
@@ -149,6 +155,8 @@ fn accept_existing(body: String) -> Result(Nil, String) {
 ```
 
 `ensure_books_index(opensearch, "books")` returns `Ok(Nil)` when it creates the index, and `Ok(Nil)` when the index already exists. Any other error stays an error. For example, a name in upper case gets status 400 with `invalid_index_name_exception`, and `ensure_books_index(opensearch, "Books")` returns that body as the error:
+
+### The answer to an upper-case name <a href="https://github.com/TrustBound/dream_opensearch/blob/3.0.0/test/outputs/guide_managing_indexes_invalid_name.txt"><img align="right" alt="Tested snippet" src="https://img.shields.io/badge/%F0%9F%A7%AA_tested-snippet-lightgreen.svg?style=flat-square"></a>
 
 ```text
 {"error":{"root_cause":[{"type":"invalid_index_name_exception","reason":"Invalid index name [Books], must be lowercase","index":"Books","index_uuid":"_na_"}],"type":"invalid_index_name_exception","reason":"Invalid index name [Books], must be lowercase","index":"Books","index_uuid":"_na_"},"status":400}
@@ -269,12 +277,16 @@ pub fn copy_index(
 
 `copy_index(opensearch, "books_v1", "books_v2")` sends:
 
+### The request of copy_index <a href="https://github.com/TrustBound/dream_opensearch/blob/3.0.0/test/outputs/guide_managing_indexes_reindex_request.txt"><img align="right" alt="Tested snippet" src="https://img.shields.io/badge/%F0%9F%A7%AA_tested-snippet-lightgreen.svg?style=flat-square"></a>
+
 ```text
 POST /_reindex
 {"source":{"index":"books_v1"},"dest":{"index":"books_v2"}}
 ```
 
 OpenSearch copies the documents and answers when it is done:
+
+### The answer to the reindex <a href="https://github.com/TrustBound/dream_opensearch/blob/3.0.0/test/outputs/guide_managing_indexes_reindex_response.txt"><img align="right" alt="Tested snippet" src="https://img.shields.io/badge/%F0%9F%A7%AA_tested-snippet-lightgreen.svg?style=flat-square"></a>
 
 ```text
 {"took":59,"timed_out":false,"total":2,"updated":0,"created":2,"deleted":0,"batches":1,"version_conflicts":0,"noops":0,"retries":{"bulk":0,"search":0},"throttled_millis":0,"requests_per_second":-1.0,"throttled_until_millis":0,"failures":[]}
@@ -358,8 +370,11 @@ The setup code also has a part you can test as a plain value, the index body, an
 
 Add `dream_test` as a dev dependency, from GitHub, with the commit that this package tests with:
 
+### The dev dependency on dream_test <a href="https://github.com/TrustBound/dream_opensearch/blob/3.0.0/gleam.toml#L27-L29"><img align="right" alt="Tested snippet" src="https://img.shields.io/badge/%F0%9F%A7%AA_tested-snippet-lightgreen.svg?style=flat-square"></a>
+
 ```toml
 [dev-dependencies]
+# Switched to a Hex version range once it is published.
 dream_test = { git = "https://github.com/TrustBound/dream_test.git", ref = "1639959578a14ae3577f8e3ae5cac058f933aa53" }
 ```
 
