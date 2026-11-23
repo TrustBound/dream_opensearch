@@ -13,6 +13,8 @@ pub type TestServer
 pub type Reply {
   /// Answer with this status and body (content-type: application/json).
   Respond(status: Int, body: String)
+  /// Answer with this status and these body bytes, which need not be text.
+  RespondBytes(status: Int, body: BitArray)
   /// Report the first bytes the client sends, then close (used for TLS).
   CaptureRawBytes
 }

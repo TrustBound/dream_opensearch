@@ -12,7 +12,7 @@ import gleam/http
 import gleam/int
 import gleam/result
 import gleam/string
-import opensearch_test_server.{CaptureRawBytes, Respond}
+import opensearch_test_server.{CaptureRawBytes, Respond, RespondBytes}
 
 pub fn tests() -> TestSuite {
   describe("dream_opensearch/client", [
@@ -304,6 +304,34 @@ pub fn tests() -> TestSuite {
         |> or_fail_with(
           "send_request with 200 non json body returns ok body unchanged",
         )
+      }),
+      it("with 200 and a body that is not UTF-8 returns an error", fn() {
+        // Arrange
+        let server = opensearch_test_server.start(RespondBytes(200, <<255, 0>>))
+        let os_client = client.new(opensearch_test_server.base_url(server))
+
+        // Act
+        let result = client.send_request(os_client, http.Get, "/", "")
+
+        // Assert
+        result
+        |> should
+        |> be_equal(Error("The OpenSearch response body is not valid UTF-8"))
+        |> or_fail_with("A 200 body that is not UTF-8 should be an error")
+      }),
+      it("with 500 and a body that is not UTF-8 returns an error", fn() {
+        // Arrange
+        let server = opensearch_test_server.start(RespondBytes(500, <<255, 0>>))
+        let os_client = client.new(opensearch_test_server.base_url(server))
+
+        // Act
+        let result = client.send_request(os_client, http.Get, "/", "")
+
+        // Assert
+        result
+        |> should
+        |> be_equal(Error("The OpenSearch response body is not valid UTF-8"))
+        |> or_fail_with("A 500 body that is not UTF-8 should be an error")
       }),
       it("with 200 unicode body returns ok body unchanged", fn() {
         // Arrange

@@ -137,6 +137,8 @@ pub fn new(base_url: String) -> Client {
 /// - The response status is 400 or more: the response body, unchanged.
 /// - The connection fails: `Connection failed: <reason>`, for example
 ///   `Connection failed: Connection refused`.
+/// - The response body is not valid UTF-8, with any status:
+///   `The OpenSearch response body is not valid UTF-8`.
 /// - The URL cannot be parsed:
 ///   `Invalid OpenSearch URL: the URL cannot be parsed`. No request is sent.
 /// - The URL has no host: `Invalid OpenSearch URL: the URL has no host`. No
@@ -321,12 +323,17 @@ fn response_to_result(
   response: Result(http_client.HttpResponse, http_client.SendError),
 ) -> Result(String, String) {
   case response {
-    Ok(http_client.HttpResponse(body: body, ..)) -> Ok(body)
-    Error(http_client.ResponseError(response: http_client.HttpResponse(
-      body: body,
-      ..,
-    ))) -> Error(body)
+    Ok(response) -> body_text(response)
+    Error(http_client.ResponseError(response: response)) ->
+      body_text(response) |> result.try(Error)
     Error(http_client.RequestError(error: transport_error)) ->
       Error(http_client.transport_error_to_string(transport_error))
   }
+}
+
+// OpenSearch answers with JSON, which is UTF-8. A body that is not UTF-8 has
+// no text form, so it is an error.
+fn body_text(response: http_client.HttpResponse) -> Result(String, String) {
+  http_client.body_text(response)
+  |> result.replace_error("The OpenSearch response body is not valid UTF-8")
 }

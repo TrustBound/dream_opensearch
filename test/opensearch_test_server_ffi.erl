@@ -70,6 +70,8 @@ handle(Parent, Reply, Socket) ->
         {error, _} -> ok
     end.
 
+answer({respond_bytes, Status, Body}, Socket) ->
+    answer({respond, Status, Body}, Socket);
 answer({respond, Status, Body}, Socket) ->
     Response = [<<"HTTP/1.1 ">>, integer_to_binary(Status), <<" Test\r\n">>,
                 <<"content-type: application/json\r\n">>,
