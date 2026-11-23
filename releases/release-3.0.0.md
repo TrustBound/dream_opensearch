@@ -31,6 +31,10 @@ It is a major version because a project on `dream_http_client` 5 cannot use it. 
 
 `dream_opensearch` moved out of the Dream repository. It has its own version, its own changelog and its own release workflow. The package name on Hex and the module names are the same as before.
 
+### Guides
+
+The package has guides in [`docs/guides/`](https://github.com/TrustBound/dream_opensearch/tree/main/docs/guides). The README is short and links to them, and HexDocs shows the guides.
+
 ## Bug Fixes
 
 ### A User Name and Password in the Base URL Authenticate
@@ -96,6 +100,12 @@ Allow version 6 in your own `gleam.toml`, and read the `dream_http_client` 6.0.0
 - [dream_opensearch](https://hexdocs.pm/dream_opensearch) - v3.0.0
 - [dream_http_client](https://hexdocs.pm/dream_http_client) - v6.0.0
 - [README](https://github.com/TrustBound/dream_opensearch/blob/main/README.md)
+- [Getting started](https://github.com/TrustBound/dream_opensearch/blob/main/docs/guides/getting-started.md)
+- [Client setup](https://github.com/TrustBound/dream_opensearch/blob/main/docs/guides/client-setup.md)
+- [Indexing documents](https://github.com/TrustBound/dream_opensearch/blob/main/docs/guides/indexing-documents.md)
+- [Searching](https://github.com/TrustBound/dream_opensearch/blob/main/docs/guides/searching.md)
+- [Index management](https://github.com/TrustBound/dream_opensearch/blob/main/docs/guides/index-management.md)
+- [Bulk operations](https://github.com/TrustBound/dream_opensearch/blob/main/docs/guides/bulk-operations.md)
 - [Changelog](https://github.com/TrustBound/dream_opensearch/blob/main/CHANGELOG.md)
 
 ## Community

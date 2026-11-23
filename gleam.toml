@@ -8,6 +8,16 @@ links = [
     { title = "GitHub", href = "https://github.com/TrustBound/dream_opensearch" },
 ]
 
+[documentation]
+pages = [
+    { title = "Getting started", path = "guides/getting-started.html", source = "./docs/guides/getting-started.md" },
+    { title = "Client setup", path = "guides/client-setup.html", source = "./docs/guides/client-setup.md" },
+    { title = "Indexing documents", path = "guides/indexing-documents.html", source = "./docs/guides/indexing-documents.md" },
+    { title = "Searching", path = "guides/searching.html", source = "./docs/guides/searching.md" },
+    { title = "Index management", path = "guides/index-management.html", source = "./docs/guides/index-management.md" },
+    { title = "Bulk operations", path = "guides/bulk-operations.html", source = "./docs/guides/bulk-operations.md" },
+]
+
 [dependencies]
 gleam_stdlib = ">= 1.0.0 and < 2.0.0"
 gleam_json = ">= 2.0.0 and < 4.0.0"
@@ -19,7 +29,7 @@ dream_http_client = { git = "https://github.com/TrustBound/dream_http_client.git
 # Switched to a Hex version range once it is published.
 dream_test = { git = "https://github.com/TrustBound/dream_test.git", ref = "1639959578a14ae3577f8e3ae5cac058f933aa53" }
 # Switched to a Hex version range once it is published.
-dream_snippets = { git = "https://github.com/TrustBound/dream_snippets.git", ref = "7a862a3e5b74f0a7f2e9c15170d4d6c772605cfb" }
+dream_snippets = { git = "https://github.com/TrustBound/dream_snippets.git", ref = "f116b072699ec33315980418036d962e22fab872" }
 
 [tools.dream_snippets]
 # Changelog sections and release notes before this version are history. They are not checked.

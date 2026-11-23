@@ -18,6 +18,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Needs dream_http_client 6.0.0 or later. A major version, because a project on dream_http_client 5 cannot use it.
 - `send_request` returns `Error("The OpenSearch response body is not valid UTF-8")` for a response body that is not UTF-8, with any status. dream_http_client 6.0.0 gives the body as bytes, and this package returns text. Before, such a body came back as a `String` that was not valid text.
 - `send_request` returns an error, and sends no request, when the URL cannot be parsed, has no host, or has invalid percent-encoding in the user name or password (for example `"Invalid OpenSearch URL: the URL has no host"`). Before, it tried to connect and returned a connection error. No error message contains the user name or password.
+- The package has guides in `docs/guides/`. The README is short and links to them, and HexDocs shows the guides.
 
 ### Upgrading
 
