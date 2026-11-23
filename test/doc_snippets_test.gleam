@@ -6,7 +6,7 @@
 
 import dream_opensearch/client
 import dream_test/matchers.{be_equal, or_fail_with, should}
-import dream_test/types.{type TestSuite}
+import dream_test/suite.{type TestSuite}
 import dream_test/unit.{describe, group, it}
 import gleam/result
 import opensearch_test_server.{Respond}
@@ -27,7 +27,7 @@ import snippets/doc_query_quick_start
 import snippets/doc_query_range
 import snippets/doc_query_term
 
-pub fn tests() -> TestSuite(Nil) {
+pub fn tests() -> TestSuite {
   describe("doc comment snippets", [
     group("client module", [
       it("create client uses localhost 9200", fn() {

@@ -4,11 +4,11 @@
 
 import dream_opensearch/query
 import dream_test/matchers.{be_equal, or_fail_with, should}
-import dream_test/types.{type TestSuite}
+import dream_test/suite.{type TestSuite}
 import dream_test/unit.{describe, group, it}
 import gleam/string
 
-pub fn tests() -> TestSuite(Nil) {
+pub fn tests() -> TestSuite {
   describe("dream_opensearch/query", [
     group("match_all", [
       it("returns match all query json", fn() {

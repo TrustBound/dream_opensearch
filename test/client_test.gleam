@@ -5,7 +5,7 @@
 
 import dream_opensearch/client.{Client}
 import dream_test/matchers.{be_equal, or_fail_with, should}
-import dream_test/types.{type TestSuite}
+import dream_test/suite.{type TestSuite}
 import dream_test/unit.{describe, group, it}
 import gleam/bit_array
 import gleam/http
@@ -14,7 +14,7 @@ import gleam/result
 import gleam/string
 import opensearch_test_server.{CaptureRawBytes, Respond}
 
-pub fn tests() -> TestSuite(Nil) {
+pub fn tests() -> TestSuite {
   describe("dream_opensearch/client", [
     group("new", [
       it("without trailing slash keeps url", fn() {

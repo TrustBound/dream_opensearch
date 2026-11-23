@@ -7,7 +7,7 @@
 
 import dream_opensearch/client
 import dream_test/matchers.{be_equal, or_fail_with, should}
-import dream_test/types.{type TestSuite}
+import dream_test/suite.{type TestSuite}
 import dream_test/unit.{describe, group, it}
 import gleam/int
 import gleam/result
@@ -20,7 +20,7 @@ import snippets/readme_indexing_documents
 import snippets/readme_quick_start
 import snippets/readme_searching
 
-pub fn tests() -> TestSuite(Nil) {
+pub fn tests() -> TestSuite {
   describe("README snippets", [
     group("Quick Start", [
       it("create client uses localhost 9200", fn() {

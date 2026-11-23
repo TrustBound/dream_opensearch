@@ -5,13 +5,13 @@
 
 import dream_opensearch/client
 import dream_test/matchers.{be_equal, or_fail_with, should}
-import dream_test/types.{type TestSuite}
+import dream_test/suite.{type TestSuite}
 import dream_test/unit.{describe, it}
 import gleam/result
 import opensearch_test_server.{Respond}
 import snippets/architecture_opensearch
 
-pub fn tests() -> TestSuite(Nil) {
+pub fn tests() -> TestSuite {
   describe("architecture snippet", [
     it("create client uses localhost 9200", fn() {
       // Arrange
