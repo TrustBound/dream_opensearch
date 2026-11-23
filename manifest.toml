@@ -8,7 +8,7 @@
 
 packages = [
   { name = "cowlib", version = "2.22.0", build_tools = ["make", "rebar3"], requirements = [], otp_app = "cowlib", source = "hex", outer_checksum = "B1EA5995D8F1AB5086AE7AFE710C2075C7872C7E1ACAF45DD0DB7595E900C0FC" },
-  { name = "dream_http_client", version = "6.0.0", build_tools = ["gleam"], requirements = ["gleam_crypto", "gleam_erlang", "gleam_http", "gleam_json", "gleam_otp", "gleam_stdlib", "gleam_yielder", "gun", "simplifile"], source = "git", repo = "https://github.com/TrustBound/dream_http_client.git", commit = "06d237650b3b392cf9c16d0a207ba95048fbf9ac" },
+  { name = "dream_http_client", version = "6.0.0", build_tools = ["gleam"], requirements = ["gleam_crypto", "gleam_erlang", "gleam_http", "gleam_json", "gleam_otp", "gleam_stdlib", "gleam_yielder", "gun", "simplifile"], source = "git", repo = "https://github.com/TrustBound/dream_http_client.git", commit = "af661517f46417b72b67e84545ba6dcfc04fc59d" },
   { name = "dream_snippets", version = "1.0.0", build_tools = ["gleam"], requirements = ["gleam_stdlib", "simplifile", "tom"], source = "git", repo = "https://github.com/TrustBound/dream_snippets.git", commit = "7a862a3e5b74f0a7f2e9c15170d4d6c772605cfb" },
   { name = "dream_test", version = "3.0.0", build_tools = ["gleam"], requirements = ["gleam_erlang", "gleam_json", "gleam_otp", "gleam_regexp", "gleam_stdlib"], source = "git", repo = "https://github.com/TrustBound/dream_test.git", commit = "1639959578a14ae3577f8e3ae5cac058f933aa53" },
   { name = "filepath", version = "1.1.2", build_tools = ["gleam"], requirements = ["gleam_stdlib"], otp_app = "filepath", source = "hex", outer_checksum = "B06A9AF0BF10E51401D64B98E4B627F1D2E48C154967DA7AF4D0914780A6D40A" },
@@ -27,7 +27,7 @@ packages = [
 ]
 
 [requirements]
-dream_http_client = { git = "https://github.com/TrustBound/dream_http_client.git", ref = "06d237650b3b392cf9c16d0a207ba95048fbf9ac" }
+dream_http_client = { git = "https://github.com/TrustBound/dream_http_client.git", ref = "af661517f46417b72b67e84545ba6dcfc04fc59d" }
 dream_snippets = { git = "https://github.com/TrustBound/dream_snippets.git", ref = "7a862a3e5b74f0a7f2e9c15170d4d6c772605cfb" }
 dream_test = { git = "https://github.com/TrustBound/dream_test.git", ref = "1639959578a14ae3577f8e3ae5cac058f933aa53" }
 gleam_http = { version = ">= 4.3.0 and < 5.0.0" }
