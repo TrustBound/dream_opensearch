@@ -1,6 +1,6 @@
 # dream_opensearch Makefile
 
-.PHONY: test build format check docs clean
+.PHONY: test build format check check-snippets docs clean
 
 # Run the tests with the coverage report (fails below 100% coverage)
 test:
@@ -20,6 +20,11 @@ check:
 	@gleam build
 	@gleam test
 	@gleam docs build
+	@gleam run -m dream_snippets
+
+# Check that each code block in the docs matches a tested snippet
+check-snippets:
+	@gleam run -m dream_snippets
 
 # Generate the documentation
 docs:

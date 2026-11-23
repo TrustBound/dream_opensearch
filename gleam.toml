@@ -18,3 +18,9 @@ dream_http_client = { git = "https://github.com/TrustBound/dream_http_client.git
 [dev-dependencies]
 # Switched to a Hex version range once it is published.
 dream_test = { git = "https://github.com/TrustBound/dream_test.git", ref = "c583145874e63118cc5e680a293dd52cd4c35517" }
+# Switched to a Hex version range once it is published.
+dream_snippets = { git = "https://github.com/TrustBound/dream_snippets.git", ref = "7a862a3e5b74f0a7f2e9c15170d4d6c772605cfb" }
+
+[tools.dream_snippets]
+# Changelog sections and release notes before this version are history. They are not checked.
+checked_from_version = "3.0.0"
