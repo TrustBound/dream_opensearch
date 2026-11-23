@@ -26,13 +26,28 @@
 //// }
 //// ```
 ////
+//// ## Index names and document IDs
+////
+//// Each function puts the index name and the document ID in the URL path as
+//// one path segment each, and percent-encodes them: every byte outside
+//// `A-Z a-z 0-9 - . _ ~` goes out as `%XX` (UTF-8, upper-case hex). So an
+//// ID such as `a#b`, `a/b`, `a?b=1` or `my id` reaches OpenSearch whole.
+//// Pass names and IDs as they are, not encoded: an encoded value is encoded
+//// again. OpenSearch still checks each index name, and answers a name it
+//// does not allow (upper case, `#`, a space) with an
+//// `invalid_index_name_exception` error.
+////
 //// ## JSON Format
 ////
 //// All document operations expect JSON strings. Use `gleam/json` to build
 //// JSON objects and convert them to strings with `json.to_string()`.
 
 import dream_opensearch/client.{type Client}
+import gleam/bit_array
 import gleam/http
+import gleam/int
+import gleam/list
+import gleam/string
 
 /// Index a document in OpenSearch
 ///
@@ -91,8 +106,7 @@ pub fn index(
   document_id: String,
   document_json: String,
 ) -> Result(String, String) {
-  let path = "/" <> index_name <> "/_doc/" <> document_id
-  client.send_request(client, http.Put, path, document_json)
+  send(client, http.Put, [index_name, "_doc", document_id], document_json)
 }
 
 /// Search documents in an index
@@ -142,8 +156,7 @@ pub fn search(
   index_name: String,
   query_json: String,
 ) -> Result(String, String) {
-  let path = "/" <> index_name <> "/_search"
-  client.send_request(client, http.Post, path, query_json)
+  send(client, http.Post, [index_name, "_search"], query_json)
 }
 
 /// Delete a document from an index
@@ -192,8 +205,7 @@ pub fn delete(
   index_name: String,
   document_id: String,
 ) -> Result(String, String) {
-  let path = "/" <> index_name <> "/_doc/" <> document_id
-  client.send_request(client, http.Delete, path, "")
+  send(client, http.Delete, [index_name, "_doc", document_id], "")
 }
 
 /// Create an index with mapping
@@ -256,8 +268,7 @@ pub fn create_index(
   index_name: String,
   mapping_json: String,
 ) -> Result(String, String) {
-  let path = "/" <> index_name
-  client.send_request(client, http.Put, path, mapping_json)
+  send(client, http.Put, [index_name], mapping_json)
 }
 
 /// Delete an index
@@ -305,8 +316,7 @@ pub fn delete_index(
   client: Client,
   index_name: String,
 ) -> Result(String, String) {
-  let path = "/" <> index_name
-  client.send_request(client, http.Delete, path, "")
+  send(client, http.Delete, [index_name], "")
 }
 
 /// Bulk index documents
@@ -355,6 +365,63 @@ pub fn delete_index(
 /// }
 /// ```
 pub fn bulk(client: Client, ndjson: String) -> Result(String, String) {
-  let path = "/_bulk"
-  client.send_request(client, http.Post, path, ndjson)
+  send(client, http.Post, ["_bulk"], ndjson)
+}
+
+/// Sends a request to the path made of `segments`. Every function of this
+/// module sends its request here, so every index name and document ID in a
+/// path is percent-encoded.
+fn send(
+  client: Client,
+  method: http.Method,
+  segments: List(String),
+  body: String,
+) -> Result(String, String) {
+  let path =
+    segments
+    |> list.map(fn(segment) { "/" <> encode_segment(segment) })
+    |> string.concat
+  client.send_request(client, method, path, body)
+}
+
+/// Percent-encodes one path segment: each byte of the UTF-8 form of
+/// `segment` that is not in the RFC 3986 unreserved set
+/// (`A-Z a-z 0-9 - . _ ~`) becomes `%` and two upper-case hex digits. So
+/// `/`, `#`, `?`, `%` and spaces in a name or an ID stay part of it.
+fn encode_segment(segment: String) -> String {
+  segment
+  |> string.to_utf_codepoints
+  |> list.map(encode_codepoint)
+  |> string.concat
+}
+
+fn encode_codepoint(codepoint: UtfCodepoint) -> String {
+  let character = string.from_utf_codepoints([codepoint])
+  case is_unreserved(string.utf_codepoint_to_int(codepoint)) {
+    True -> character
+    False -> encode_bytes(bit_array.from_string(character), "")
+  }
+}
+
+fn encode_bytes(bytes: BitArray, encoded: String) -> String {
+  case bytes {
+    <<byte, rest:bytes>> ->
+      encode_bytes(
+        rest,
+        encoded
+          <> "%"
+          <> string.pad_start(int.to_base16(byte), to: 2, with: "0"),
+      )
+    _ -> encoded
+  }
+}
+
+fn is_unreserved(byte: Int) -> Bool {
+  { byte >= 0x41 && byte <= 0x5A }
+  || { byte >= 0x61 && byte <= 0x7A }
+  || { byte >= 0x30 && byte <= 0x39 }
+  || byte == 0x2D
+  || byte == 0x2E
+  || byte == 0x5F
+  || byte == 0x7E
 }

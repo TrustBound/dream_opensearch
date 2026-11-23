@@ -76,16 +76,15 @@ pub fn delete_alice(opensearch: Client) -> Result(String, String) {
 
 ## Guides
 
-- [Getting started](https://github.com/TrustBound/dream_opensearch/blob/main/docs/guides/getting-started.md): install the package and index, search and delete a first document
-- [Client setup](https://github.com/TrustBound/dream_opensearch/blob/main/docs/guides/client-setup.md): create a client, send credentials in the base URL, and read the errors
-- [Indexing documents](https://github.com/TrustBound/dream_opensearch/blob/main/docs/guides/indexing-documents.md): add, replace and delete documents
-- [Searching](https://github.com/TrustBound/dream_opensearch/blob/main/docs/guides/searching.md): search with the query builders or with your own query JSON
-- [Index management](https://github.com/TrustBound/dream_opensearch/blob/main/docs/guides/index-management.md): create an index with a mapping and delete an index
-- [Bulk operations](https://github.com/TrustBound/dream_opensearch/blob/main/docs/guides/bulk-operations.md): index many documents in one request
+- [Getting started](https://github.com/TrustBound/dream_opensearch/blob/main/docs/guides/getting-started.md): connect to a local or a secured cluster, then save, search for and delete documents from a Gleam module, with tests
+- [Searching an index](https://github.com/TrustBound/dream_opensearch/blob/main/docs/guides/searching.md): match, term, range and bool queries, pages and sorting, and reading the hits into your own types
+- [Loading documents in bulk](https://github.com/TrustBound/dream_opensearch/blob/main/docs/guides/bulk-loading.md): load many documents in one request, find the ones that failed, load in batches and retry
+- [Managing indexes](https://github.com/TrustBound/dream_opensearch/blob/main/docs/guides/managing-indexes.md): create an index with settings and a mapping, check, refresh, count, copy and delete indexes
+- [Handling errors](https://github.com/TrustBound/dream_opensearch/blob/main/docs/guides/handling-errors.md): every error the client returns, a typed error to match on, what to retry, and logs without the password
 
 ## API Reference
 
-The full API reference is on [HexDocs](https://hexdocs.pm/dream_opensearch). Each guide lists the functions it uses.
+The full API reference is on [HexDocs](https://hexdocs.pm/dream_opensearch). The guides show each function where a task needs it.
 
 ## Design Principles
 

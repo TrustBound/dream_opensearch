@@ -33,7 +33,7 @@ It is a major version because a project on `dream_http_client` 5 cannot use it. 
 
 ### Guides
 
-The package has guides in [`docs/guides/`](https://github.com/TrustBound/dream_opensearch/tree/main/docs/guides). The README is short and links to them, and HexDocs shows the guides.
+The package has five guides in [`docs/guides/`](https://github.com/TrustBound/dream_opensearch/tree/main/docs/guides): getting started, searching an index, loading documents in bulk, managing indexes, and handling errors. Each one walks through a task from start to finish, with tested code, the failure cases, tests for your own code and common pitfalls. The README is short and links to them, and HexDocs shows the guides.
 
 ## Bug Fixes
 
@@ -60,13 +60,25 @@ pub fn create_client_with_credentials() -> Client {
 }
 ```
 
+### Index Names and Document IDs Are Percent-Encoded
+
+Before, the `document` functions put the index name and the document ID in the URL path as they were. Some IDs lost or changed data:
+
+- `document.index(c, "users", "a#b", body)` sent `PUT /users/_doc/a` and returned `Ok`
+- `document.delete(c, "users", "a#b")` deleted document `a`
+- `a/b` went out as `/users/_doc/a/b`, and `a?b=1` as `/users/_doc/a?b=1`
+- `my id` returned `Error("Invalid OpenSearch URL: the URL cannot be parsed")`
+
+Now every `document` function percent-encodes each index name and document ID as one path segment. Every byte outside `A-Z a-z 0-9 - . _ ~` goes out as `%XX` (UTF-8, upper-case hex), so `a#b` goes out as `a%23b`. Against OpenSearch 2.19.1, a document with the ID `a#b`, `a/b`, `a?b=1`, `my id` or `café ☕` is stored, found by a search for exactly that `_id`, and deleted, and the document `a` stays. An index name that OpenSearch does not allow (upper case, `#`, a space) reaches OpenSearch and comes back as its `invalid_index_name_exception` error. `client.send_request` still sends the path that you give it, unchanged.
+
 ### The URL Is Parsed With `gleam/uri`
 
 `send_request` now parses the URL with `gleam/uri`. A query string in the path (`/users/_search?size=5`) is sent as before.
 
 ## Testing
 
-- 146 tests run, 0 failed, 100.0% line coverage, in about 0.4 seconds (Apple M1 Max, OTP 29, Gleam 1.19.2)
+- 247 tests run, 0 failed, 100.0% line coverage, in about 7 seconds (Apple M1 Max, OTP 29, Gleam 1.19.2, OpenSearch 2.19.1 in Docker on the same machine)
+- The tests run against a real OpenSearch 2.19.1 in Docker (`docker-compose.yml`, `make search-up`), locally and in CI
 
 ## Upgrading
 
@@ -85,7 +97,7 @@ gleam deps update dream_opensearch
 
 ### Migration Guide
 
-No code change is necessary. Two things can change what your app does.
+Most code needs no change. Three things can change what your app does.
 
 #### 1. Your base URL already holds a user name and password
 
@@ -95,17 +107,20 @@ That URL starts to authenticate. Make sure that those credentials are correct, b
 
 Allow version 6 in your own `gleam.toml`, and read the `dream_http_client` 6.0.0 release notes. Its response body is now bytes.
 
+#### 3. You percent-encode index names or document IDs yourself
+
+Stop, and pass them as they are. The `document` functions now encode them, so an encoded ID is encoded two times: `uri.percent_encode("a#b")` gives `a%23b`, which goes out as `a%2523b`, and OpenSearch stores the ID `a%23b`.
+
 ## Documentation
 
 - [dream_opensearch](https://hexdocs.pm/dream_opensearch) - v3.0.0
 - [dream_http_client](https://hexdocs.pm/dream_http_client) - v6.0.0
 - [README](https://github.com/TrustBound/dream_opensearch/blob/main/README.md)
 - [Getting started](https://github.com/TrustBound/dream_opensearch/blob/main/docs/guides/getting-started.md)
-- [Client setup](https://github.com/TrustBound/dream_opensearch/blob/main/docs/guides/client-setup.md)
-- [Indexing documents](https://github.com/TrustBound/dream_opensearch/blob/main/docs/guides/indexing-documents.md)
-- [Searching](https://github.com/TrustBound/dream_opensearch/blob/main/docs/guides/searching.md)
-- [Index management](https://github.com/TrustBound/dream_opensearch/blob/main/docs/guides/index-management.md)
-- [Bulk operations](https://github.com/TrustBound/dream_opensearch/blob/main/docs/guides/bulk-operations.md)
+- [Searching an index](https://github.com/TrustBound/dream_opensearch/blob/main/docs/guides/searching.md)
+- [Loading documents in bulk](https://github.com/TrustBound/dream_opensearch/blob/main/docs/guides/bulk-loading.md)
+- [Managing indexes](https://github.com/TrustBound/dream_opensearch/blob/main/docs/guides/managing-indexes.md)
+- [Handling errors](https://github.com/TrustBound/dream_opensearch/blob/main/docs/guides/handling-errors.md)
 - [Changelog](https://github.com/TrustBound/dream_opensearch/blob/main/CHANGELOG.md)
 
 ## Community

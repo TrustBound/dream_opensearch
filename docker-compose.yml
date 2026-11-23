@@ -1,0 +1,50 @@
+# OpenSearch for the tests of dream_opensearch.
+#
+#   make search-up     start both nodes and wait until they are healthy
+#   make search-down   stop and remove them
+#
+# opensearch: the node for almost all tests, with the security plugin off,
+#   on http://localhost:9201 (OPENSEARCH_URL).
+# opensearch-secured: a node with the security plugin on and HTTP Basic
+#   authentication over plain HTTP, on http://localhost:9202
+#   (OPENSEARCH_SECURED_URL). The tests use it only for the 401 answers and
+#   for credentials in the base URL. The admin password is a made-up test
+#   value.
+#
+# No volumes: every start is an empty cluster.
+
+services:
+  opensearch:
+    image: opensearchproject/opensearch:2.19.1
+    environment:
+      discovery.type: single-node
+      DISABLE_SECURITY_PLUGIN: "true"
+      DISABLE_INSTALL_DEMO_CONFIG: "true"
+      OPENSEARCH_JAVA_OPTS: "-Xms512m -Xmx512m"
+      # A small request size limit, so the tests can show the 413 answer
+      # to a bulk request that is too large.
+      http.max_content_length: 1mb
+    ports:
+      - "9201:9200"
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS 'http://localhost:9200/_cluster/health?wait_for_status=yellow&timeout=1s' > /dev/null"]
+      interval: 3s
+      timeout: 5s
+      retries: 60
+
+  opensearch-secured:
+    image: opensearchproject/opensearch:2.19.1
+    environment:
+      discovery.type: single-node
+      OPENSEARCH_INITIAL_ADMIN_PASSWORD: "Test:P@ss/w0rd!"
+      # Keep the security plugin, but serve HTTP without TLS, so the client
+      # needs no certificate for this node.
+      plugins.security.ssl.http.enabled: "false"
+      OPENSEARCH_JAVA_OPTS: "-Xms512m -Xmx512m"
+    ports:
+      - "9202:9200"
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS -u 'admin:Test:P@ss/w0rd!' 'http://localhost:9200/_cluster/health?wait_for_status=yellow&timeout=1s' > /dev/null"]
+      interval: 3s
+      timeout: 5s
+      retries: 60

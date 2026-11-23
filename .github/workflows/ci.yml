@@ -23,6 +23,41 @@ jobs:
       coverage_message: ${{ steps.coverage_badge.outputs.message }}
       coverage_color: ${{ steps.coverage_badge.outputs.color }}
 
+    # The tests run against a real OpenSearch, with the same image, settings
+    # and ports as docker-compose.yml.
+    services:
+      opensearch:
+        image: opensearchproject/opensearch:2.19.1
+        env:
+          discovery.type: single-node
+          DISABLE_SECURITY_PLUGIN: "true"
+          DISABLE_INSTALL_DEMO_CONFIG: "true"
+          OPENSEARCH_JAVA_OPTS: "-Xms512m -Xmx512m"
+          http.max_content_length: 1mb
+        ports:
+          - 9201:9200
+        options: >-
+          --health-cmd "curl -fsS 'http://localhost:9200/_cluster/health?wait_for_status=yellow&timeout=1s' > /dev/null"
+          --health-interval 3s
+          --health-timeout 5s
+          --health-retries 60
+      opensearch-secured:
+        image: opensearchproject/opensearch:2.19.1
+        env:
+          discovery.type: single-node
+          # A made-up password for tests. It must match docker-compose.yml
+          # and test/opensearch_cluster.gleam.
+          OPENSEARCH_INITIAL_ADMIN_PASSWORD: "Test:P@ss/w0rd!"
+          plugins.security.ssl.http.enabled: "false"
+          OPENSEARCH_JAVA_OPTS: "-Xms512m -Xmx512m"
+        ports:
+          - 9202:9200
+        options: >-
+          --health-cmd "curl -fsS -u 'admin:Test:P@ss/w0rd!' 'http://localhost:9200/_cluster/health?wait_for_status=yellow&timeout=1s' > /dev/null"
+          --health-interval 3s
+          --health-timeout 5s
+          --health-retries 60
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -65,11 +100,14 @@ jobs:
       - name: Build project
         run: gleam build
 
-      # The tests need no OpenSearch: each test sends its request to a
-      # one-shot local server on 127.0.0.1. The run fails below 100% coverage.
+      # The tests run against the OpenSearch service containers above. A few
+      # failure tests use a one-shot local server on 127.0.0.1 instead. The
+      # run fails below 100% coverage.
       - name: Run tests
         env:
           CI: "true"
+          OPENSEARCH_URL: http://localhost:9201
+          OPENSEARCH_SECURED_URL: http://localhost:9202
         run: gleam test
 
       - name: Build documentation

@@ -124,7 +124,11 @@ pub fn new(base_url: String) -> Client {
 ///
 /// - `client`: The OpenSearch client
 /// - `method`: The HTTP method (GET, POST, PUT, DELETE, etc.)
-/// - `path`: The API path (e.g., "/users/_doc/123" or "/users/_search")
+/// - `path`: The API path (e.g., "/users/_doc/123" or "/users/_search"),
+///   sent as it is. This function does not percent-encode it: encode an
+///   index name or a document ID with characters outside `A-Z a-z 0-9 - . _ ~`
+///   yourself. The `dream_opensearch/document` functions encode them for
+///   you.
 /// - `body`: The request body as a JSON string
 ///
 /// ## Returns
@@ -136,7 +140,15 @@ pub fn new(base_url: String) -> Client {
 ///
 /// - The response status is 400 or more: the response body, unchanged.
 /// - The connection fails: `Connection failed: <reason>`, for example
-///   `Connection failed: Connection refused`.
+///   `Connection failed: Connection refused`, or
+///   `Connection failed: DNS resolution failed (NXDOMAIN)` for a host name
+///   that does not resolve. No request is sent.
+/// - The server closes the connection with no answer:
+///   `Remote closed connection`. The HTTP client sends the request once
+///   more on a new connection before it returns this error.
+/// - The server sends no answer for 30 seconds:
+///   `Timed out after 30000ms`. The request was sent, and the cluster can
+///   still finish it.
 /// - The response body is not valid UTF-8, with any status:
 ///   `The OpenSearch response body is not valid UTF-8`.
 /// - The URL cannot be parsed:

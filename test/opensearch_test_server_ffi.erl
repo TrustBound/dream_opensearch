@@ -5,7 +5,7 @@
 %% to the calling process, answers as told, and exits. Nothing outlives a test:
 %% the accept and receive calls time out after a few seconds.
 -module(opensearch_test_server_ffi).
--export([start/1, await_request/1, await_raw_bytes/1, port/1, unused_port/0]).
+-export([start/1, start_sequence/1, await_request/1, await_raw_bytes/1, port/1, unused_port/0]).
 
 -define(TIMEOUT_MS, 3000).
 
@@ -15,6 +15,16 @@
 start(Reply) ->
     Parent = self(),
     Pid = spawn(fun() -> listen(Parent, Reply) end),
+    receive
+        {opensearch_test_server_port, Pid, Port} -> {test_server, Pid, Port}
+    after ?TIMEOUT_MS -> erlang:error(test_server_did_not_start)
+    end.
+
+%% Like start/1, but accepts one connection for each reply in Replies, in
+%% order, and answers the Nth connection with the Nth reply.
+start_sequence(Replies) ->
+    Parent = self(),
+    Pid = spawn(fun() -> listen_sequence(Parent, Replies) end),
     receive
         {opensearch_test_server_port, Pid, Port} -> {test_server, Pid, Port}
     after ?TIMEOUT_MS -> erlang:error(test_server_did_not_start)
@@ -54,6 +64,24 @@ listen(Parent, Reply) ->
     end,
     gen_tcp:close(Listen).
 
+listen_sequence(Parent, Replies) ->
+    {ok, Listen} = gen_tcp:listen(0, [binary, {active, false},
+                                      {ip, {127, 0, 0, 1}}, {reuseaddr, true}]),
+    {ok, Port} = inet:port(Listen),
+    Parent ! {opensearch_test_server_port, self(), Port},
+    serve_each(Parent, Listen, Replies),
+    gen_tcp:close(Listen).
+
+serve_each(_Parent, _Listen, []) -> ok;
+serve_each(Parent, Listen, [Reply | Rest]) ->
+    case gen_tcp:accept(Listen, ?TIMEOUT_MS) of
+        {ok, Socket} ->
+            handle(Parent, Reply, Socket),
+            gen_tcp:close(Socket),
+            serve_each(Parent, Listen, Rest);
+        {error, _} -> ok
+    end.
+
 handle(Parent, capture_raw_bytes, Socket) ->
     case gen_tcp:recv(Socket, 0, ?TIMEOUT_MS) of
         {ok, Bytes} -> Parent ! {opensearch_test_server_raw, self(), Bytes};
@@ -70,6 +98,7 @@ handle(Parent, Reply, Socket) ->
         {error, _} -> ok
     end.
 
+answer(close_without_answer, _Socket) -> ok;
 answer({respond_bytes, Status, Body}, Socket) ->
     answer({respond, Status, Body}, Socket);
 answer({respond, Status, Body}, Socket) ->

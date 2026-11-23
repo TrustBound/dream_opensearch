@@ -17,6 +17,8 @@ pub type Reply {
   RespondBytes(status: Int, body: BitArray)
   /// Report the first bytes the client sends, then close (used for TLS).
   CaptureRawBytes
+  /// Read the request, then close the connection with no answer.
+  CloseWithoutAnswer
 }
 
 /// The request as it arrived on the wire. Header names are lowercase.
@@ -31,6 +33,12 @@ pub type CapturedRequest {
 
 @external(erlang, "opensearch_test_server_ffi", "start")
 pub fn start(reply: Reply) -> TestServer
+
+/// Like `start`, but answers one connection for each reply, in order. Use
+/// it for code that sends more than one request. `await_request` returns
+/// the captured requests in the order they arrived.
+@external(erlang, "opensearch_test_server_ffi", "start_sequence")
+pub fn start_sequence(replies: List(Reply)) -> TestServer
 
 @external(erlang, "opensearch_test_server_ffi", "port")
 pub fn port(server: TestServer) -> Int

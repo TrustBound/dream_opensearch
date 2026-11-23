@@ -29,11 +29,15 @@ dream_opensearch is part of the [Dream](https://github.com/TrustBound/dream) fam
 
 2. **Run tests:**
    ```bash
+   make search-up           # Start OpenSearch 2.19.1 in Docker, wait until healthy
    make test                # All tests, with the coverage report
+   make search-down         # Stop OpenSearch
    ```
 
-   The tests need no OpenSearch: each test sends its request to a small
-   local server on 127.0.0.1.
+   The tests run against a real OpenSearch from `docker-compose.yml`, on
+   ports 9201 and 9202. Set `OPENSEARCH_URL` and `OPENSEARCH_SECURED_URL`
+   to use other nodes. A few failure tests use a small local server on
+   127.0.0.1.
 
 3. **Make your changes:**
    - Write code following Dream's [design principles](https://github.com/TrustBound/dream/blob/release/3.0.0/docs/reference/design-principles.md)

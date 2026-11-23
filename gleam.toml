@@ -11,11 +11,10 @@ links = [
 [documentation]
 pages = [
     { title = "Getting started", path = "guides/getting-started.html", source = "./docs/guides/getting-started.md" },
-    { title = "Client setup", path = "guides/client-setup.html", source = "./docs/guides/client-setup.md" },
-    { title = "Indexing documents", path = "guides/indexing-documents.html", source = "./docs/guides/indexing-documents.md" },
-    { title = "Searching", path = "guides/searching.html", source = "./docs/guides/searching.md" },
-    { title = "Index management", path = "guides/index-management.html", source = "./docs/guides/index-management.md" },
-    { title = "Bulk operations", path = "guides/bulk-operations.html", source = "./docs/guides/bulk-operations.md" },
+    { title = "Searching an index", path = "guides/searching.html", source = "./docs/guides/searching.md" },
+    { title = "Loading documents in bulk", path = "guides/bulk-loading.html", source = "./docs/guides/bulk-loading.md" },
+    { title = "Managing indexes", path = "guides/managing-indexes.html", source = "./docs/guides/managing-indexes.md" },
+    { title = "Handling errors", path = "guides/handling-errors.html", source = "./docs/guides/handling-errors.md" },
 ]
 
 [dependencies]
