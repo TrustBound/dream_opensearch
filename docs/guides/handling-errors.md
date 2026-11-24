@@ -43,7 +43,7 @@ Here is every kind of error, with the exact string, for a call such as `document
 |:---|:---|:---|
 | Nothing listens at the address | `Connection failed: Connection refused` | No |
 | The host name does not resolve | `Connection failed: DNS resolution failed (NXDOMAIN)` | No |
-| The server closed the connection with no answer | `Remote closed connection` | Yes, two times |
+| The server closed the connection with no answer | `Remote closed connection` | Yes: one time for a POST, two times for the other methods |
 | The server sent nothing for 30 seconds | `Timed out after 30000ms` | Yes |
 | The base URL has no scheme, as in `localhost:9200` | `Invalid OpenSearch URL: the URL has no host` | No |
 | The base URL cannot be parsed, as in `http://[::1` | `Invalid OpenSearch URL: the URL cannot be parsed` | No |
@@ -68,7 +68,7 @@ But not every answer with an error status is a JSON error object:
 
 Two more facts you can count on. No error string contains the user name or the password from the base URL. And for the rows marked "No", the client did not send anything, so nothing changed on the cluster.
 
-When the server closes the connection with no answer, the client sends the same request a second time on a new connection, and returns `Remote closed connection` only when that one fails too. Keep that in mind for requests that are not safe to repeat, such as a bulk request with `create` actions.
+When the server closes the connection with no answer, the client sends a GET, HEAD, PUT or DELETE request a second time on a new connection, and returns `Remote closed connection` only when that one fails too. For example, `document.index` and `document.delete` go two times. A POST goes one time only, because it may not be safe to repeat: `document.search` and `document.bulk` return `Remote closed connection` after the first try.
 
 ## Step 2: Turn the string into a typed error
 

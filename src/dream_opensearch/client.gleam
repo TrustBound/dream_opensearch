@@ -147,8 +147,9 @@ pub fn new(base_url: String) -> Client {
 ///   `Connection failed: DNS resolution failed (NXDOMAIN)` for a host name
 ///   that does not resolve. No request is sent.
 /// - The server closes the connection with no answer:
-///   `Remote closed connection`. The HTTP client sends the request once
-///   more on a new connection before it returns this error.
+///   `Remote closed connection`. For GET, HEAD, PUT and DELETE, the HTTP
+///   client sends the request once more on a new connection before it
+///   returns this error. It sends a POST one time only.
 /// - The server sends no answer for 30 seconds:
 ///   `Timed out after 30000ms`. The request was sent, and the cluster can
 ///   still finish it.

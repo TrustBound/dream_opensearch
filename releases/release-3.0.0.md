@@ -77,7 +77,7 @@ Now every `document` function percent-encodes each index name and document ID as
 
 ## Testing
 
-- 256 tests run, 0 failed, 100.0% line coverage, in about 7 seconds (Apple M1 Max, OTP 29, Gleam 1.19.2, OpenSearch 2.19.1 in Docker on the same machine)
+- 257 tests run, 0 failed, 100.0% line coverage, in about 14 seconds (Apple M1 Max, OTP 29, Gleam 1.19.2, OpenSearch 2.19.1 in Docker on the same machine)
 - The tests run against a real OpenSearch 2.19.1 in Docker (`docker-compose.yml`, `make search-up`), locally and in CI
 - Every code block of the guides is checked: each output block is a file in `test/outputs/` that a test compares with the real output, and each file and command block is a copy of `docker-compose.yml`, `gleam.toml` or a script in `scripts/`
 

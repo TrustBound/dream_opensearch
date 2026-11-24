@@ -96,7 +96,7 @@ pub fn tests() -> TestSuite {
         |> be_equal(Error("Remote closed connection"))
         |> or_fail_with("Expected a closed connection")
       }),
-      it("a closed connection makes the client send the request twice", fn() {
+      it("a closed connection makes the client send a POST one time", fn() {
         // Arrange
         let server =
           opensearch_test_server.start_sequence([
@@ -117,10 +117,36 @@ pub fn tests() -> TestSuite {
         |> be_equal(
           #(Error("Remote closed connection"), [
             Ok(#("POST", "/books/_search")),
-            Ok(#("POST", "/books/_search")),
+            Error(Nil),
           ]),
         )
-        |> or_fail_with("The same POST should arrive two times")
+        |> or_fail_with("The POST should arrive one time only")
+      }),
+      it("a closed connection makes the client send a PUT two times", fn() {
+        // Arrange
+        let server =
+          opensearch_test_server.start_sequence([
+            CloseWithoutAnswer,
+            CloseWithoutAnswer,
+          ])
+        let opensearch = client.new(opensearch_test_server.base_url(server))
+
+        // Act
+        let indexed = document.index(opensearch, "books", "1", "{}")
+
+        // Assert
+        [server, server]
+        |> list.map(opensearch_test_server.await_request)
+        |> list.map(result.map(_, opensearch_test_server.request_line))
+        |> fn(requests) { #(indexed, requests) }
+        |> should
+        |> be_equal(
+          #(Error("Remote closed connection"), [
+            Ok(#("PUT", "/books/_doc/1")),
+            Ok(#("PUT", "/books/_doc/1")),
+          ]),
+        )
+        |> or_fail_with("The same PUT should arrive two times")
       }),
       it("a URL with no scheme", fn() {
         // Act

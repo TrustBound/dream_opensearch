@@ -22,7 +22,7 @@ gleam_stdlib = ">= 1.0.0 and < 2.0.0"
 gleam_json = ">= 2.0.0 and < 4.0.0"
 gleam_http = ">= 4.3.0 and < 5.0.0"
 # Switched to a Hex version range once it is published.
-dream_http_client = { git = "https://github.com/TrustBound/dream_http_client.git", ref = "af661517f46417b72b67e84545ba6dcfc04fc59d" }
+dream_http_client = { git = "https://github.com/TrustBound/dream_http_client.git", ref = "bea1b785bba9d6b88b7eb1696fd30ddcd2deb564" }
 
 [dev-dependencies]
 # Switched to a Hex version range once it is published.
