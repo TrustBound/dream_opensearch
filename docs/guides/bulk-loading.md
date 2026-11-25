@@ -326,14 +326,13 @@ The two parts of the loader that are easy to get wrong are the body and the read
 - **The body.** Assert the exact string `bulk_body` returns. That catches a missing newline or a wrong action line.
 - **The failed items.** Give `failed_items` a response with a failure in it. Partial failures are rare on a quiet development cluster, so this test is often the only place your failure handling runs before production.
 
-Add `dream_test` as a dev dependency, from GitHub, with the commit that this package tests with:
+Add `dream_test` as a dev dependency, with the version range that this package tests with:
 
-### The dev dependency on dream_test <a href="https://github.com/TrustBound/dream_opensearch/blob/3.0.0/gleam.toml#L27-L29"><img align="right" alt="Tested snippet" src="https://img.shields.io/badge/%F0%9F%A7%AA_tested-snippet-lightgreen.svg?style=flat-square"></a>
+### The dev dependency on dream_test <a href="https://github.com/TrustBound/dream_opensearch/blob/3.0.0/gleam.toml#L26-L27"><img align="right" alt="Tested snippet" src="https://img.shields.io/badge/%F0%9F%A7%AA_tested-snippet-lightgreen.svg?style=flat-square"></a>
 
 ```toml
 [dev-dependencies]
-# Switched to a Hex version range once it is published.
-dream_test = { git = "https://github.com/TrustBound/dream_test.git", ref = "1639959578a14ae3577f8e3ae5cac058f933aa53" }
+dream_test = ">= 3.0.0 and < 4.0.0"
 ```
 
 Here is a test module for both parts:

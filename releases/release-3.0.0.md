@@ -1,10 +1,10 @@
 # dream_opensearch 3.0.0 Release Notes
 
-**Release Date:** not released yet (draft)
+**Release Date:** 2026-11-25
 
 This release makes a user name and password in the base URL authenticate, and moves `dream_opensearch` to `dream_http_client` 6.0.0. Before, `client.new("https://user:pass@host:9200")` sent no `authorization` header, so a secured OpenSearch answered 401.
 
-It is a major version because a project on `dream_http_client` 5 cannot use it. Your code needs no change. Read "Upgrading" before you upgrade. The package also moved to its own repository.
+It is a major version because a project on `dream_http_client` 5 cannot use it, and because an HTTP error answer from OpenSearch is now an `Error`. Read "Upgrading" before you upgrade. The package also moved to its own repository.
 
 ## Key Highlights
 
@@ -18,6 +18,10 @@ It is a major version because a project on `dream_http_client` 5 cannot use it. 
 ### Needs `dream_http_client` 6.0.0
 
 `dream_opensearch` now uses `dream_http_client` 6.0.0 or later. A project that also lists `dream_http_client` must allow version 6.
+
+### An HTTP Error Answer Is an `Error`
+
+`send_request` returns an answer with status 4xx or 5xx as `Error(body)`. Before, in 2.0.0, it returned `Ok(body)`. The body is the answer of OpenSearch, which usually holds the error details, for example `index_not_found_exception`. A 2.1.0 entry in the changelog had this change, but 2.1.0 was never published to Hex, so 3.0.0 is the first release with it.
 
 ### A Response Body That Is Not UTF-8
 
@@ -77,7 +81,7 @@ Now every `document` function percent-encodes each index name and document ID as
 
 ## Testing
 
-- 257 tests run, 0 failed, 100.0% line coverage, in about 14 seconds (Apple M1 Max, OTP 29, Gleam 1.19.2, OpenSearch 2.19.1 in Docker on the same machine)
+- 257 tests run, 0 failed, 100.0% line coverage, in about 16 seconds (Apple M1 Max, OTP 29, Gleam 1.19.2, OpenSearch 2.19.1 in Docker on the same machine)
 - The tests run against a real OpenSearch 2.19.1 in Docker (`docker-compose.yml`, `make search-up`), locally and in CI
 - Every code block of the guides is checked: each output block is a file in `test/outputs/` that a test compares with the real output, and each file and command block is a copy of `docker-compose.yml`, `gleam.toml` or a script in `scripts/`
 
@@ -98,7 +102,7 @@ gleam deps update dream_opensearch
 
 ### Migration Guide
 
-Most code needs no change. Three things can change what your app does.
+Most code needs no change. Four things can change what your app does.
 
 #### 1. Your base URL already holds a user name and password
 
@@ -108,7 +112,11 @@ That URL starts to authenticate. Make sure that those credentials are correct, b
 
 Allow version 6 in your own `gleam.toml`, and read the `dream_http_client` 6.0.0 release notes. Its response body is now bytes.
 
-#### 3. You percent-encode index names or document IDs yourself
+#### 3. Your code reads an error from an `Ok` body
+
+An answer with status 4xx or 5xx now comes back as `Error(body)`. Read the error from `Error`, and stop to look for it in an `Ok` body.
+
+#### 4. You percent-encode index names or document IDs yourself
 
 Stop, and pass them as they are. The `document` functions now encode them, so an encoded ID is encoded two times: `uri.percent_encode("a#b")` gives `a%23b`, which goes out as `a%2523b`, and OpenSearch stores the ID `a%23b`.
 

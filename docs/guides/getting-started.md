@@ -435,14 +435,13 @@ The module from this guide has two kinds of code: code that talks to the cluster
 - **The JSON reading** needs no cluster. Copy a real response body from your cluster into your test, and give it to `users_from_response`.
 - **The error path** needs no cluster either. A client for an address where nothing listens gives you a real connection error, so you can test that your code passes it on.
 
-Add the test framework as a dev dependency. `dream_test` is not on Hex yet, so add it from GitHub, with the commit that this package tests with:
+Add the test framework as a dev dependency, with the version range that this package tests with:
 
-### The dev dependency on dream_test <a href="https://github.com/TrustBound/dream_opensearch/blob/3.0.0/gleam.toml#L27-L29"><img align="right" alt="Tested snippet" src="https://img.shields.io/badge/%F0%9F%A7%AA_tested-snippet-lightgreen.svg?style=flat-square"></a>
+### The dev dependency on dream_test <a href="https://github.com/TrustBound/dream_opensearch/blob/3.0.0/gleam.toml#L26-L27"><img align="right" alt="Tested snippet" src="https://img.shields.io/badge/%F0%9F%A7%AA_tested-snippet-lightgreen.svg?style=flat-square"></a>
 
 ```toml
 [dev-dependencies]
-# Switched to a Hex version range once it is published.
-dream_test = { git = "https://github.com/TrustBound/dream_test.git", ref = "1639959578a14ae3577f8e3ae5cac058f933aa53" }
+dream_test = ">= 3.0.0 and < 4.0.0"
 ```
 
 Here is a test module for the two parts that need no cluster. It uses [dream_test](https://hexdocs.pm/dream_test):

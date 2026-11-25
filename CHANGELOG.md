@@ -5,7 +5,7 @@ All notable changes to `dream_opensearch` will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [3.0.0] - Unreleased
+## [3.0.0] - 2026-11-25
 
 ### Fixed
 
@@ -16,6 +16,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 - Moved to its own repository
+- `send_request` returns an HTTP error answer (status 4xx or 5xx) as `Error(body)`. Before, in 2.0.0, it returned `Ok(body)`. The body is the answer of OpenSearch, which usually holds the error details. This change was in a 2.1.0 section of this changelog, but 2.1.0 was never published to Hex, so 3.0.0 is the first release with it.
 - Needs dream_http_client 6.0.0 or later. A major version, because a project on dream_http_client 5 cannot use it.
 - `send_request` returns `Error("The OpenSearch response body is not valid UTF-8")` for a response body that is not UTF-8, with any status. dream_http_client 6.0.0 gives the body as bytes, and this package returns text. Before, such a body came back as a `String` that was not valid text.
 - `send_request` returns an error, and sends no request, when the URL cannot be parsed, has no host, or has invalid percent-encoding in the user name or password (for example `"Invalid OpenSearch URL: the URL has no host"`). Before, it tried to connect and returned a connection error. No error message contains the user name or password.
@@ -27,15 +28,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Upgrading
 
 - If you percent-encode index names or document IDs before you pass them to a `document` function, stop. The function now encodes them, so an encoded ID is encoded two times: `a%23b` goes out as `a%2523b`, and OpenSearch stores the ID `a%23b`.
+- If your code reads an error from an `Ok` body (for example a status 404 or 400 answer), read it from `Error` now.
 - No other code change is necessary. A base URL that already holds a user name and password starts to authenticate. Check that those credentials are correct, because a server that ignored them before now reads them.
-
-## [2.1.0] - 2026-02-16
-
-### Changed
-
-- Updated to `dream_http_client` 5.0.0.
-- `send_request` now properly routes HTTP error responses (4xx/5xx) to `Error(body)` instead of `Ok(body)`. The error string contains the response body, which typically includes error details from OpenSearch.
-- Updated dependency constraint: `dream_http_client >= 5.0.0 and < 6.0.0`.
 
 ## [2.0.0]
 
