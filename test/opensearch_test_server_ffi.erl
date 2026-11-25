@@ -99,6 +99,11 @@ handle(Parent, Reply, Socket) ->
     end.
 
 answer(close_without_answer, _Socket) -> ok;
+%% Wait for bytes that the client never sends, so the request gets no
+%% answer until the client gives up and closes the connection.
+answer(hold_without_answer, Socket) ->
+    _ = gen_tcp:recv(Socket, 0, ?TIMEOUT_MS),
+    ok;
 answer({respond_bytes, Status, Body}, Socket) ->
     answer({respond, Status, Body}, Socket);
 answer({respond, Status, Body}, Socket) ->

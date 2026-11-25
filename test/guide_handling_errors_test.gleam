@@ -2,14 +2,17 @@
 //// (docs/guides/handling-errors.md). The answers of OpenSearch come from
 //// the real cluster of `opensearch_cluster`. The local test server of
 //// `opensearch_test_server` stands in only for what a cluster cannot be
-//// made to do on demand: close a connection with no answer, send a body
-//// that is not UTF-8. Refused connections go to a port where nothing
-//// listens.
+//// made to do on demand: close a connection with no answer, hold a request
+//// with no answer, send a body that is not UTF-8. Refused connections go to
+//// a port where nothing listens.
 ////
 //// Each `text` block of the guide is a file in `test/outputs/`, and a test
 //// here compares it with the real output (see `guide_output`).
 
-import dream_opensearch/client.{type Client}
+import dream_opensearch/client.{
+  type Client, InvalidResponseBody, InvalidUrl, NoRecording, Rejected, TimedOut,
+  Unavailable,
+}
 import dream_opensearch/document
 import dream_test/matchers.{be_equal, or_fail_with, should}
 import dream_test/suite.{type TestSuite}
@@ -21,61 +24,65 @@ import gleam/string
 import guide_output
 import guide_responses
 import opensearch_cluster
-import opensearch_test_server.{type Reply, CloseWithoutAnswer, RespondBytes}
-import snippets/guide_handling_errors_classify.{
-  type OpenSearchError, BadConfiguration, Interrupted, OtherAnswer, Rejected,
-  Unreachable,
+import opensearch_test_server.{
+  type Reply, CloseWithoutAnswer, HoldWithoutAnswer, RespondBytes,
 }
+import snippets/guide_handling_errors_classify.{type ErrorDetails, ErrorDetails}
 import snippets/guide_handling_errors_log
+import snippets/guide_handling_errors_timeout
 
-/// `error` with the field labels of `Rejected`, as the guide shows it.
-/// The other variants are printed with `string.inspect`.
-fn labelled(error: OpenSearchError) -> String {
-  case error {
-    Rejected(status:, error_type:, reason:) ->
-      "Rejected(status: "
-      <> string.inspect(status)
-      <> ", error_type: "
+/// `details` with the field labels, as the guide shows it.
+fn labelled(details: Result(ErrorDetails, Nil)) -> String {
+  case details {
+    Ok(ErrorDetails(error_type:, reason:)) ->
+      "Ok(ErrorDetails(error_type: "
       <> string.inspect(error_type)
       <> ", reason: "
       <> string.inspect(reason)
-      <> ")"
-    _ -> string.inspect(error)
+      <> "))"
+    Error(Nil) -> "Error(Nil)"
   }
   |> guide_output.lines
 }
 
 fn client_for(reply: Reply) -> Client {
   let server = opensearch_test_server.start(reply)
-  client.new(opensearch_test_server.base_url(server))
+  opensearch_cluster.client_for(opensearch_test_server.base_url(server))
 }
 
-fn search_books(opensearch: Client) -> Result(String, String) {
+fn search_books(opensearch: Client) -> Result(String, client.OpenSearchError) {
   document.search(opensearch, "books", "{}")
 }
 
 pub fn tests() -> TestSuite {
   describe("handling errors guide", [
-    group("step 1: the error strings", [
+    group("step 1: the errors", [
       it("a refused connection", fn() {
         // Act
-        let searched = search_books(client.new("http://127.0.0.1:1"))
+        let searched =
+          search_books(opensearch_cluster.client_for("http://127.0.0.1:1"))
 
         // Assert
         searched
         |> should
-        |> be_equal(Error("Connection failed: Connection refused"))
+        |> be_equal(Error(Unavailable("Connection failed: Connection refused")))
         |> or_fail_with("Expected a refused connection")
       }),
       it("a host that does not resolve", fn() {
         // Act
         let searched =
-          search_books(client.new("http://no-such-host.invalid:9200"))
+          search_books(opensearch_cluster.client_for(
+            "http://no-such-host.invalid:9200",
+          ))
 
         // Assert
         searched
         |> should
-        |> be_equal(Error("Connection failed: DNS resolution failed (NXDOMAIN)"))
+        |> be_equal(
+          Error(Unavailable(
+            "Connection failed: DNS resolution failed (NXDOMAIN)",
+          )),
+        )
         |> or_fail_with("Expected a failed lookup")
       }),
       it("a server that closes the connection with no answer", fn() {
@@ -85,7 +92,8 @@ pub fn tests() -> TestSuite {
             CloseWithoutAnswer,
             CloseWithoutAnswer,
           ])
-        let opensearch = client.new(opensearch_test_server.base_url(server))
+        let opensearch =
+          opensearch_cluster.client_for(opensearch_test_server.base_url(server))
 
         // Act
         let searched = search_books(opensearch)
@@ -93,7 +101,7 @@ pub fn tests() -> TestSuite {
         // Assert
         searched
         |> should
-        |> be_equal(Error("Remote closed connection"))
+        |> be_equal(Error(Unavailable("Remote closed connection")))
         |> or_fail_with("Expected a closed connection")
       }),
       it("a closed connection makes the client send a POST one time", fn() {
@@ -103,7 +111,8 @@ pub fn tests() -> TestSuite {
             CloseWithoutAnswer,
             CloseWithoutAnswer,
           ])
-        let opensearch = client.new(opensearch_test_server.base_url(server))
+        let opensearch =
+          opensearch_cluster.client_for(opensearch_test_server.base_url(server))
 
         // Act
         let searched = search_books(opensearch)
@@ -115,7 +124,7 @@ pub fn tests() -> TestSuite {
         |> fn(requests) { #(searched, requests) }
         |> should
         |> be_equal(
-          #(Error("Remote closed connection"), [
+          #(Error(Unavailable("Remote closed connection")), [
             Ok(#("POST", "/books/_search")),
             Error(Nil),
           ]),
@@ -129,7 +138,8 @@ pub fn tests() -> TestSuite {
             CloseWithoutAnswer,
             CloseWithoutAnswer,
           ])
-        let opensearch = client.new(opensearch_test_server.base_url(server))
+        let opensearch =
+          opensearch_cluster.client_for(opensearch_test_server.base_url(server))
 
         // Act
         let indexed = document.index(opensearch, "books", "1", "{}")
@@ -141,65 +151,81 @@ pub fn tests() -> TestSuite {
         |> fn(requests) { #(indexed, requests) }
         |> should
         |> be_equal(
-          #(Error("Remote closed connection"), [
+          #(Error(Unavailable("Remote closed connection")), [
             Ok(#("PUT", "/books/_doc/1")),
             Ok(#("PUT", "/books/_doc/1")),
           ]),
         )
         |> or_fail_with("The same PUT should arrive two times")
       }),
-      it("a URL with no scheme", fn() {
+      it("a server that sends no answer within the timeout", fn() {
+        // Arrange
+        let server = opensearch_test_server.start(HoldWithoutAnswer)
+        let opensearch =
+          guide_handling_errors_timeout.client_with_timeout(
+            "127.0.0.1",
+            opensearch_test_server.port(server),
+            100,
+          )
+
         // Act
-        let searched = search_books(client.new("localhost:9200"))
+        let searched = search_books(opensearch)
 
         // Assert
         searched
         |> should
-        |> be_equal(Error("Invalid OpenSearch URL: the URL has no host"))
-        |> or_fail_with("Expected no host")
+        |> be_equal(Error(TimedOut(timeout_ms: 100)))
+        |> or_fail_with("Expected the timeout of the base request")
+      }),
+      it("a URL with no scheme", fn() {
+        // Act
+        let created = client.new("localhost:9200")
+
+        // Assert
+        created
+        |> should
+        |> be_equal(Error(InvalidUrl("the URL scheme must be http or https")))
+        |> or_fail_with("Expected no scheme")
       }),
       it("a URL that cannot be parsed", fn() {
         // Act
-        let searched = search_books(client.new("http://[::1"))
+        let created = client.new("http://[::1")
 
         // Assert
-        searched
+        created
         |> should
-        |> be_equal(Error("Invalid OpenSearch URL: the URL cannot be parsed"))
+        |> be_equal(Error(InvalidUrl("the URL cannot be parsed")))
         |> or_fail_with("Expected a parse error")
       }),
       it("a password with a bare percent sign", fn() {
         // Act
-        let searched =
-          search_books(client.new("http://admin:p%zz@localhost:9200"))
+        let created = client.new("http://admin:p%zz@localhost:9200")
 
         // Assert
-        searched
+        created
         |> should
-        |> be_equal(Error(
-          "Invalid credentials in the OpenSearch URL: the user name or password has invalid percent-encoding",
-        ))
+        |> be_equal(
+          Error(InvalidUrl(
+            "the user name or password has invalid percent-encoding",
+          )),
+        )
         |> or_fail_with("Expected a credentials error")
       }),
-      it("an OpenSearch error comes back as its body", fn() {
+      it("an OpenSearch error comes back as its status and body", fn() {
         // Act
         let searched = {
           use opensearch, index <- opensearch_cluster.with_index("books")
-          // The index name varies, so put the name of the guide in its place
-          document.search(opensearch, index, "{}")
-          |> result.map_error(string.replace(_, index, "books"))
-          |> Ok
+          case document.search(opensearch, index, "{}") {
+            Ok(body) -> Error("Expected a 404, got: " <> body)
+            // The index name varies, so put the name of the guide in its place
+            Error(Rejected(status: 404, body:)) ->
+              guide_output.stable_json(string.replace(body, index, "books"), [])
+            Error(error) -> Error(client.describe_error(error))
+          }
         }
 
         // Assert
         searched
-        |> result.map(fn(outcome) {
-          case outcome {
-            Ok(body) -> Error("Expected a 404, got: " <> body)
-            Error(body) -> guide_output.stable_json(body, [])
-          }
-        })
-        |> result.flatten
         |> should
         |> be_equal(
           guide_output.stable_file("guide_handling_errors_missing_index", []),
@@ -209,15 +235,17 @@ pub fn tests() -> TestSuite {
       it("a plain text 401 comes back as its body", fn() {
         // Act
         let searched =
-          search_books(client.new(opensearch_cluster.secured_base_url()))
+          search_books(
+            opensearch_cluster.client_for(opensearch_cluster.secured_base_url()),
+          )
 
         // Assert
         searched
         |> should
-        |> be_equal(Error("Unauthorized"))
+        |> be_equal(Error(Rejected(status: 401, body: "Unauthorized")))
         |> or_fail_with("Expected Unauthorized")
       }),
-      it("an error status with no body is an empty string", fn() {
+      it("an error status with no body has an empty body", fn() {
         // Act
         let checked = {
           use opensearch, index <- opensearch_cluster.with_index("books")
@@ -227,7 +255,7 @@ pub fn tests() -> TestSuite {
         // Assert
         checked
         |> should
-        |> be_equal(Ok(Error("")))
+        |> be_equal(Ok(Error(Rejected(status: 404, body: ""))))
         |> or_fail_with("A HEAD for a missing index gets a 404 with no body")
       }),
       it("a body that is not UTF-8", fn() {
@@ -237,24 +265,26 @@ pub fn tests() -> TestSuite {
         // Assert
         searched
         |> should
-        |> be_equal(Error("The OpenSearch response body is not valid UTF-8"))
+        |> be_equal(Error(InvalidResponseBody(status: 200)))
         |> or_fail_with("Expected the UTF-8 error")
       }),
     ]),
-    group("step 2 and 3: classify", [
-      it("classify reads status, type and reason", fn() {
+    group("step 2: error_details", [
+      it("error_details reads the type and the reason", fn() {
         // Act
-        let error = {
+        let details = {
           use opensearch, index <- opensearch_cluster.with_index("books")
-          // The index name varies, so put the name of the guide in its place
           document.search(opensearch, index, "{}")
+          // The index name varies, so put the name of the guide in its place
+          |> opensearch_cluster.rejected_body
           |> result.map_error(string.replace(_, index, "books"))
-          |> result.map_error(guide_handling_errors_classify.classify)
+          |> result.map_error(Rejected(status: 404, body: _))
+          |> result.map_error(guide_handling_errors_classify.error_details)
           |> Ok
         }
 
         // Assert
-        error
+        details
         |> result.map(result.map_error(_, labelled))
         |> should
         |> be_equal(
@@ -262,52 +292,38 @@ pub fn tests() -> TestSuite {
         )
         |> or_fail_with("Expected a 404 index_not_found_exception")
       }),
-      it("classify sorts every kind of message", fn() {
+      it("error_details has no details for the other errors", fn() {
         // Arrange
-        let messages = [
-          "Connection failed: Connection refused",
-          "Remote closed connection",
-          "Timed out after 30000ms",
-          "Invalid OpenSearch URL: the URL has no host",
-          "Invalid credentials in the OpenSearch URL: the user name or password has invalid percent-encoding",
-          "Unauthorized",
-          guide_responses.bad_gateway_page,
-          "",
+        let errors = [
+          Rejected(status: 401, body: "Unauthorized"),
+          Rejected(status: 502, body: guide_responses.bad_gateway_page),
+          Rejected(status: 404, body: ""),
+          Unavailable("Connection failed: Connection refused"),
+          TimedOut(timeout_ms: 30_000),
         ]
 
         // Act
-        let errors = list.map(messages, guide_handling_errors_classify.classify)
+        let details =
+          list.map(errors, guide_handling_errors_classify.error_details)
 
         // Assert
-        errors
+        details
         |> should
-        |> be_equal([
-          Unreachable("Connection refused"),
-          Interrupted("Remote closed connection"),
-          Interrupted("Timed out after 30000ms"),
-          BadConfiguration("Invalid OpenSearch URL: the URL has no host"),
-          BadConfiguration(
-            "Invalid credentials in the OpenSearch URL: the user name or password has invalid percent-encoding",
-          ),
-          OtherAnswer("Unauthorized"),
-          OtherAnswer(guide_responses.bad_gateway_page),
-          OtherAnswer(""),
-        ])
-        |> or_fail_with("Each message should land in its variant")
+        |> be_equal([Error(Nil), Error(Nil), Error(Nil), Error(Nil), Error(Nil)])
+        |> or_fail_with("Only an OpenSearch error object has details")
       }),
     ]),
-    group("step 4: retry", [
+    group("step 3: retry", [
       it("worth_a_retry says yes to the passing failures", fn() {
         // Arrange
         let errors = [
-          Unreachable("Connection refused"),
-          Interrupted("Remote closed connection"),
-          guide_handling_errors_classify.classify(
-            guide_responses.cluster_not_ready,
-          ),
-          Rejected(429, "es_rejected_execution_exception", "busy"),
-          Rejected(502, "bad_gateway", "proxy"),
-          Rejected(504, "gateway_timeout", "proxy"),
+          Unavailable("Connection failed: Connection refused"),
+          Unavailable("Remote closed connection"),
+          TimedOut(timeout_ms: 30_000),
+          Rejected(status: 503, body: guide_responses.cluster_not_ready),
+          Rejected(status: 429, body: ""),
+          Rejected(status: 502, body: guide_responses.bad_gateway_page),
+          Rejected(status: 504, body: ""),
         ]
 
         // Act
@@ -317,16 +333,18 @@ pub fn tests() -> TestSuite {
         // Assert
         answers
         |> should
-        |> be_equal([True, True, True, True, True, True])
+        |> be_equal([True, True, True, True, True, True, True])
         |> or_fail_with("All of these can pass")
       }),
       it("worth_a_retry says no to the rest", fn() {
         // Arrange
         let errors = [
-          Rejected(404, "index_not_found_exception", "no such index [books]"),
-          Rejected(400, "parsing_exception", "unknown query [matches]"),
-          BadConfiguration("Invalid OpenSearch URL: the URL has no host"),
-          OtherAnswer("Unauthorized"),
+          Rejected(status: 404, body: ""),
+          Rejected(status: 400, body: ""),
+          Rejected(status: 401, body: "Unauthorized"),
+          InvalidUrl("the URL has no host"),
+          InvalidResponseBody(status: 200),
+          NoRecording(method: "GET", url: "http://localhost:9201/", details: ""),
         ]
 
         // Act
@@ -336,19 +354,23 @@ pub fn tests() -> TestSuite {
         // Assert
         answers
         |> should
-        |> be_equal([False, False, False, False])
+        |> be_equal([False, False, False, False, False, False])
         |> or_fail_with("None of these change on their own")
       }),
     ]),
-    group("step 5: logs", [
+    group("step 4: logs", [
       it("failure_line leaves out the user name and password", fn() {
         // Arrange
         let opensearch =
-          client.new("https://admin:s3cret@search.example.com:9200")
+          opensearch_cluster.client_for(
+            "https://admin:s3cret@search.example.com:9200",
+          )
 
         let refused =
           document.search(
-            client.new(opensearch_test_server.unreachable_base_url()),
+            opensearch_cluster.client_for(
+              opensearch_test_server.unreachable_base_url(),
+            ),
             "books",
             "{}",
           )
@@ -370,15 +392,18 @@ pub fn tests() -> TestSuite {
         )
         |> or_fail_with("The log line should not hold the password")
       }),
-      it("safe_url names a URL it cannot parse", fn() {
+      it("address leaves out a port that the base URL does not set", fn() {
         // Act
-        let url = guide_handling_errors_log.safe_url(client.new("http://[::1"))
+        let address =
+          guide_handling_errors_log.address(opensearch_cluster.client_for(
+            "http://search.example.com",
+          ))
 
         // Assert
-        url
+        address
         |> should
-        |> be_equal("(a base URL that cannot be parsed)")
-        |> or_fail_with("Expected the placeholder")
+        |> be_equal("http://search.example.com")
+        |> or_fail_with("Expected no port")
       }),
     ]),
   ])

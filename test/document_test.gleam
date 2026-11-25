@@ -27,7 +27,8 @@ pub fn tests() -> TestSuite {
       it("sends put to expected path", fn() {
         // Arrange
         let server = opensearch_test_server.start(Respond(200, "{}"))
-        let os_client = client.new(opensearch_test_server.base_url(server))
+        let os_client =
+          opensearch_cluster.client_for(opensearch_test_server.base_url(server))
 
         // Act
         let _ =
@@ -43,7 +44,8 @@ pub fn tests() -> TestSuite {
       it("sends given body unchanged", fn() {
         // Arrange
         let server = opensearch_test_server.start(Respond(200, "{}"))
-        let os_client = client.new(opensearch_test_server.base_url(server))
+        let os_client =
+          opensearch_cluster.client_for(opensearch_test_server.base_url(server))
 
         // Act
         let _ =
@@ -63,6 +65,7 @@ pub fn tests() -> TestSuite {
           // The index name varies, so put the name of the test in its place
           document.index(os_client, index, "123", "{\"name\":\"Alice\"}")
           |> result.map(string.replace(_, index, "users"))
+          |> opensearch_cluster.as_text
         }
 
         // Assert
@@ -86,15 +89,20 @@ pub fn tests() -> TestSuite {
         // Assert
         result
         |> should
-        |> be_equal(Error(
-          "{\"error\":{\"root_cause\":[{\"type\":\"invalid_index_name_exception\",\"reason\":\"Invalid index name [Users], must be lowercase\",\"index\":\"Users\",\"index_uuid\":\"_na_\"}],\"type\":\"invalid_index_name_exception\",\"reason\":\"Invalid index name [Users], must be lowercase\",\"index\":\"Users\",\"index_uuid\":\"_na_\"},\"status\":400}",
-        ))
+        |> be_equal(
+          Error(client.Rejected(
+            status: 400,
+            body: "{\"error\":{\"root_cause\":[{\"type\":\"invalid_index_name_exception\",\"reason\":\"Invalid index name [Users], must be lowercase\",\"index\":\"Users\",\"index_uuid\":\"_na_\"}],\"type\":\"invalid_index_name_exception\",\"reason\":\"Invalid index name [Users], must be lowercase\",\"index\":\"Users\",\"index_uuid\":\"_na_\"},\"status\":400}",
+          )),
+        )
         |> or_fail_with("index with 400 returns error response body")
       }),
       it("when nothing listens returns connection error", fn() {
         // Arrange
         let os_client =
-          client.new(opensearch_test_server.unreachable_base_url())
+          opensearch_cluster.client_for(
+            opensearch_test_server.unreachable_base_url(),
+          )
 
         // Act
         let result =
@@ -103,7 +111,9 @@ pub fn tests() -> TestSuite {
         // Assert
         result
         |> should
-        |> be_equal(Error("Connection failed: Connection refused"))
+        |> be_equal(
+          Error(client.Unavailable("Connection failed: Connection refused")),
+        )
         |> or_fail_with("index when nothing listens returns connection error")
       }),
     ]),
@@ -111,7 +121,8 @@ pub fn tests() -> TestSuite {
       it("sends post to expected path", fn() {
         // Arrange
         let server = opensearch_test_server.start(Respond(200, "{}"))
-        let os_client = client.new(opensearch_test_server.base_url(server))
+        let os_client =
+          opensearch_cluster.client_for(opensearch_test_server.base_url(server))
 
         // Act
         let _ =
@@ -127,7 +138,8 @@ pub fn tests() -> TestSuite {
       it("sends given body unchanged", fn() {
         // Arrange
         let server = opensearch_test_server.start(Respond(200, "{}"))
-        let os_client = client.new(opensearch_test_server.base_url(server))
+        let os_client =
+          opensearch_cluster.client_for(opensearch_test_server.base_url(server))
 
         // Act
         let _ =
@@ -144,12 +156,14 @@ pub fn tests() -> TestSuite {
         // Act
         let result = {
           use os_client, index <- opensearch_cluster.with_index("users")
-          use _ <- result.try(document.create_index(os_client, index, "{}"))
-          use body <- result.try(document.search(
-            os_client,
-            index,
-            "{\"query\":{\"match_all\":{}}}",
-          ))
+          use _ <- result.try(
+            document.create_index(os_client, index, "{}")
+            |> opensearch_cluster.as_text,
+          )
+          use body <- result.try(
+            document.search(os_client, index, "{\"query\":{\"match_all\":{}}}")
+            |> opensearch_cluster.as_text,
+          )
           json.parse(body, decode.at(["hits", "total", "value"], decode.int))
           |> result.replace_error("Unexpected search response: " <> body)
         }
@@ -166,6 +180,7 @@ pub fn tests() -> TestSuite {
           use os_client, index <- opensearch_cluster.with_index("users")
           // The index name varies, so put the name of the test in its place
           document.search(os_client, index, "{\"query\":{\"match_all\":{}}}")
+          |> opensearch_cluster.rejected_body
           |> result.map_error(string.replace(_, index, "users"))
           |> Ok
         }
@@ -183,7 +198,9 @@ pub fn tests() -> TestSuite {
       it("when nothing listens returns connection error", fn() {
         // Arrange
         let os_client =
-          client.new(opensearch_test_server.unreachable_base_url())
+          opensearch_cluster.client_for(
+            opensearch_test_server.unreachable_base_url(),
+          )
 
         // Act
         let result =
@@ -192,7 +209,9 @@ pub fn tests() -> TestSuite {
         // Assert
         result
         |> should
-        |> be_equal(Error("Connection failed: Connection refused"))
+        |> be_equal(
+          Error(client.Unavailable("Connection failed: Connection refused")),
+        )
         |> or_fail_with("search when nothing listens returns connection error")
       }),
     ]),
@@ -200,7 +219,8 @@ pub fn tests() -> TestSuite {
       it("sends delete to expected path", fn() {
         // Arrange
         let server = opensearch_test_server.start(Respond(200, "{}"))
-        let os_client = client.new(opensearch_test_server.base_url(server))
+        let os_client =
+          opensearch_cluster.client_for(opensearch_test_server.base_url(server))
 
         // Act
         let _ = document.delete(os_client, "users", "123")
@@ -215,7 +235,8 @@ pub fn tests() -> TestSuite {
       it("sends empty body", fn() {
         // Arrange
         let server = opensearch_test_server.start(Respond(200, "{}"))
-        let os_client = client.new(opensearch_test_server.base_url(server))
+        let os_client =
+          opensearch_cluster.client_for(opensearch_test_server.base_url(server))
 
         // Act
         let _ = document.delete(os_client, "users", "123")
@@ -231,15 +252,14 @@ pub fn tests() -> TestSuite {
         // Act
         let result = {
           use os_client, index <- opensearch_cluster.with_index("users")
-          use _ <- result.try(document.index(
-            os_client,
-            index,
-            "123",
-            "{\"name\":\"Alice\"}",
-          ))
+          use _ <- result.try(
+            document.index(os_client, index, "123", "{\"name\":\"Alice\"}")
+            |> opensearch_cluster.as_text,
+          )
           // The index name varies, so put the name of the test in its place
           document.delete(os_client, index, "123")
           |> result.map(string.replace(_, index, "users"))
+          |> opensearch_cluster.as_text
         }
 
         // Assert
@@ -254,9 +274,13 @@ pub fn tests() -> TestSuite {
         // Act
         let result = {
           use os_client, index <- opensearch_cluster.with_index("users")
-          use _ <- result.try(document.create_index(os_client, index, "{}"))
+          use _ <- result.try(
+            document.create_index(os_client, index, "{}")
+            |> opensearch_cluster.as_text,
+          )
           // The index name varies, so put the name of the test in its place
           document.delete(os_client, index, "123")
+          |> opensearch_cluster.rejected_body
           |> result.map_error(string.replace(_, index, "users"))
           |> Ok
         }
@@ -274,7 +298,9 @@ pub fn tests() -> TestSuite {
       it("when nothing listens returns connection error", fn() {
         // Arrange
         let os_client =
-          client.new(opensearch_test_server.unreachable_base_url())
+          opensearch_cluster.client_for(
+            opensearch_test_server.unreachable_base_url(),
+          )
 
         // Act
         let result = document.delete(os_client, "users", "123")
@@ -282,7 +308,9 @@ pub fn tests() -> TestSuite {
         // Assert
         result
         |> should
-        |> be_equal(Error("Connection failed: Connection refused"))
+        |> be_equal(
+          Error(client.Unavailable("Connection failed: Connection refused")),
+        )
         |> or_fail_with("delete when nothing listens returns connection error")
       }),
     ]),
@@ -290,7 +318,8 @@ pub fn tests() -> TestSuite {
       it("sends put to expected path", fn() {
         // Arrange
         let server = opensearch_test_server.start(Respond(200, "{}"))
-        let os_client = client.new(opensearch_test_server.base_url(server))
+        let os_client =
+          opensearch_cluster.client_for(opensearch_test_server.base_url(server))
 
         // Act
         let _ =
@@ -310,7 +339,8 @@ pub fn tests() -> TestSuite {
       it("sends given body unchanged", fn() {
         // Arrange
         let server = opensearch_test_server.start(Respond(200, "{}"))
-        let os_client = client.new(opensearch_test_server.base_url(server))
+        let os_client =
+          opensearch_cluster.client_for(opensearch_test_server.base_url(server))
 
         // Act
         let _ =
@@ -336,6 +366,7 @@ pub fn tests() -> TestSuite {
           // The index name varies, so put the name of the test in its place
           document.create_index(os_client, index, "{}")
           |> result.map(string.replace(_, index, "users"))
+          |> opensearch_cluster.as_text
         }
 
         // Assert
@@ -354,15 +385,20 @@ pub fn tests() -> TestSuite {
         // Assert
         result
         |> should
-        |> be_equal(Error(
-          "{\"error\":{\"root_cause\":[{\"type\":\"invalid_index_name_exception\",\"reason\":\"Invalid index name [Users], must be lowercase\",\"index\":\"Users\",\"index_uuid\":\"_na_\"}],\"type\":\"invalid_index_name_exception\",\"reason\":\"Invalid index name [Users], must be lowercase\",\"index\":\"Users\",\"index_uuid\":\"_na_\"},\"status\":400}",
-        ))
+        |> be_equal(
+          Error(client.Rejected(
+            status: 400,
+            body: "{\"error\":{\"root_cause\":[{\"type\":\"invalid_index_name_exception\",\"reason\":\"Invalid index name [Users], must be lowercase\",\"index\":\"Users\",\"index_uuid\":\"_na_\"}],\"type\":\"invalid_index_name_exception\",\"reason\":\"Invalid index name [Users], must be lowercase\",\"index\":\"Users\",\"index_uuid\":\"_na_\"},\"status\":400}",
+          )),
+        )
         |> or_fail_with("create_index with 400 returns error response body")
       }),
       it("when nothing listens returns connection error", fn() {
         // Arrange
         let os_client =
-          client.new(opensearch_test_server.unreachable_base_url())
+          opensearch_cluster.client_for(
+            opensearch_test_server.unreachable_base_url(),
+          )
 
         // Act
         let result =
@@ -375,7 +411,9 @@ pub fn tests() -> TestSuite {
         // Assert
         result
         |> should
-        |> be_equal(Error("Connection failed: Connection refused"))
+        |> be_equal(
+          Error(client.Unavailable("Connection failed: Connection refused")),
+        )
         |> or_fail_with(
           "create_index when nothing listens returns connection error",
         )
@@ -385,7 +423,8 @@ pub fn tests() -> TestSuite {
       it("sends delete to expected path", fn() {
         // Arrange
         let server = opensearch_test_server.start(Respond(200, "{}"))
-        let os_client = client.new(opensearch_test_server.base_url(server))
+        let os_client =
+          opensearch_cluster.client_for(opensearch_test_server.base_url(server))
 
         // Act
         let _ = document.delete_index(os_client, "old_index")
@@ -400,7 +439,8 @@ pub fn tests() -> TestSuite {
       it("sends empty body", fn() {
         // Arrange
         let server = opensearch_test_server.start(Respond(200, "{}"))
-        let os_client = client.new(opensearch_test_server.base_url(server))
+        let os_client =
+          opensearch_cluster.client_for(opensearch_test_server.base_url(server))
 
         // Act
         let _ = document.delete_index(os_client, "old_index")
@@ -416,7 +456,10 @@ pub fn tests() -> TestSuite {
         // Act
         let result = {
           use os_client, index <- opensearch_cluster.with_index("old_index")
-          use _ <- result.try(document.create_index(os_client, index, "{}"))
+          use _ <- result.try(
+            document.create_index(os_client, index, "{}")
+            |> opensearch_cluster.as_text,
+          )
           Ok(document.delete_index(os_client, index))
         }
 
@@ -432,6 +475,7 @@ pub fn tests() -> TestSuite {
           use os_client, index <- opensearch_cluster.with_index("old_index")
           // The index name varies, so put the name of the test in its place
           document.delete_index(os_client, index)
+          |> opensearch_cluster.rejected_body
           |> result.map_error(string.replace(_, index, "old_index"))
           |> Ok
         }
@@ -449,7 +493,9 @@ pub fn tests() -> TestSuite {
       it("when nothing listens returns connection error", fn() {
         // Arrange
         let os_client =
-          client.new(opensearch_test_server.unreachable_base_url())
+          opensearch_cluster.client_for(
+            opensearch_test_server.unreachable_base_url(),
+          )
 
         // Act
         let result = document.delete_index(os_client, "old_index")
@@ -457,7 +503,9 @@ pub fn tests() -> TestSuite {
         // Assert
         result
         |> should
-        |> be_equal(Error("Connection failed: Connection refused"))
+        |> be_equal(
+          Error(client.Unavailable("Connection failed: Connection refused")),
+        )
         |> or_fail_with(
           "delete_index when nothing listens returns connection error",
         )
@@ -467,7 +515,8 @@ pub fn tests() -> TestSuite {
       it("sends post to expected path", fn() {
         // Arrange
         let server = opensearch_test_server.start(Respond(200, "{}"))
-        let os_client = client.new(opensearch_test_server.base_url(server))
+        let os_client =
+          opensearch_cluster.client_for(opensearch_test_server.base_url(server))
 
         // Act
         let _ =
@@ -486,7 +535,8 @@ pub fn tests() -> TestSuite {
       it("sends given body unchanged", fn() {
         // Arrange
         let server = opensearch_test_server.start(Respond(200, "{}"))
-        let os_client = client.new(opensearch_test_server.base_url(server))
+        let os_client =
+          opensearch_cluster.client_for(opensearch_test_server.base_url(server))
 
         // Act
         let _ =
@@ -508,12 +558,15 @@ pub fn tests() -> TestSuite {
         // Act
         let result = {
           use os_client, index <- opensearch_cluster.with_index("users")
-          use body <- result.try(document.bulk(
-            os_client,
-            "{\"index\":{\"_index\":\""
-              <> index
-              <> "\",\"_id\":\"1\"}}\n{\"name\":\"Alice\"}\n",
-          ))
+          use body <- result.try(
+            document.bulk(
+              os_client,
+              "{\"index\":{\"_index\":\""
+                <> index
+                <> "\",\"_id\":\"1\"}}\n{\"name\":\"Alice\"}\n",
+            )
+            |> opensearch_cluster.as_text,
+          )
           json.parse(body, decode.at(["errors"], decode.bool))
           |> result.replace_error("Unexpected bulk response: " <> body)
         }
@@ -531,15 +584,20 @@ pub fn tests() -> TestSuite {
         // Assert
         result
         |> should
-        |> be_equal(Error(
-          "{\"error\":{\"root_cause\":[{\"type\":\"illegal_argument_exception\",\"reason\":\"The bulk request must be terminated by a newline [\\\\n]\"}],\"type\":\"illegal_argument_exception\",\"reason\":\"The bulk request must be terminated by a newline [\\\\n]\"},\"status\":400}",
-        ))
+        |> be_equal(
+          Error(client.Rejected(
+            status: 400,
+            body: "{\"error\":{\"root_cause\":[{\"type\":\"illegal_argument_exception\",\"reason\":\"The bulk request must be terminated by a newline [\\\\n]\"}],\"type\":\"illegal_argument_exception\",\"reason\":\"The bulk request must be terminated by a newline [\\\\n]\"},\"status\":400}",
+          )),
+        )
         |> or_fail_with("bulk with 400 returns error response body")
       }),
       it("when nothing listens returns connection error", fn() {
         // Arrange
         let os_client =
-          client.new(opensearch_test_server.unreachable_base_url())
+          opensearch_cluster.client_for(
+            opensearch_test_server.unreachable_base_url(),
+          )
 
         // Act
         let result =
@@ -551,7 +609,9 @@ pub fn tests() -> TestSuite {
         // Assert
         result
         |> should
-        |> be_equal(Error("Connection failed: Connection refused"))
+        |> be_equal(
+          Error(client.Unavailable("Connection failed: Connection refused")),
+        )
         |> or_fail_with("bulk when nothing listens returns connection error")
       }),
     ]),

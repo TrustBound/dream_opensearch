@@ -2,7 +2,7 @@
 ////
 //// A small store of users in an index: save, find and delete.
 
-import dream_opensearch/client.{type Client}
+import dream_opensearch/client.{type Client, type OpenSearchError, Rejected}
 import dream_opensearch/document
 import dream_opensearch/query
 import gleam/dynamic/decode
@@ -22,7 +22,7 @@ pub fn save_user(
   opensearch: Client,
   index: String,
   user: User,
-) -> Result(Nil, String) {
+) -> Result(Nil, OpenSearchError) {
   let body =
     json.object([
       #("name", json.string(user.name)),
@@ -39,11 +39,10 @@ pub fn find_users_by_name(
   index: String,
   name: String,
 ) -> Result(List(User), String) {
-  use body <- result.try(document.search(
-    opensearch,
-    index,
-    query.match("name", name),
-  ))
+  use body <- result.try(
+    document.search(opensearch, index, query.match("name", name))
+    |> result.map_error(client.describe_error),
+  )
   users_from_response(body)
 }
 
@@ -65,28 +64,34 @@ pub fn delete_user(
   opensearch: Client,
   index: String,
   id: String,
-) -> Result(Nil, String) {
-  document.delete(opensearch, index, id)
-  |> result.replace(Nil)
-  |> result.try_recover(ignore_not_found)
+) -> Result(Nil, OpenSearchError) {
+  case document.delete(opensearch, index, id) {
+    Ok(_response) -> Ok(Nil)
+    Error(Rejected(status: 404, body:)) -> ignore_not_found(body)
+    Error(error) -> Error(error)
+  }
 }
 
-fn ignore_not_found(body: String) -> Result(Nil, String) {
+fn ignore_not_found(body: String) -> Result(Nil, OpenSearchError) {
   case json.parse(body, decode.at(["result"], decode.string)) {
     Ok("not_found") -> Ok(Nil)
-    _ -> Error(body)
+    _ -> Error(Rejected(status: 404, body:))
   }
 }
 
 /// Makes the documents indexed so far in `index` visible to search.
-pub fn refresh(opensearch: Client, index: String) -> Result(Nil, String) {
+pub fn refresh(
+  opensearch: Client,
+  index: String,
+) -> Result(Nil, OpenSearchError) {
   client.send_request(opensearch, http.Post, "/" <> index <> "/_refresh", "")
   |> result.replace(Nil)
 }
 
 pub fn main() -> Nil {
   client.new("http://localhost:9200")
-  |> save_and_find("users")
+  |> result.map_error(client.describe_error)
+  |> result.try(save_and_find(_, "users"))
   |> string.inspect
   |> io.println
 }
@@ -97,7 +102,10 @@ pub fn save_and_find(
   index: String,
 ) -> Result(List(User), String) {
   let alice = User(id: "123", name: "Alice", email: "alice@example.com")
-  use Nil <- result.try(save_user(opensearch, index, alice))
-  use Nil <- result.try(refresh(opensearch, index))
+  let saved = {
+    use Nil <- result.try(save_user(opensearch, index, alice))
+    refresh(opensearch, index)
+  }
+  use Nil <- result.try(result.map_error(saved, client.describe_error))
   find_users_by_name(opensearch, index, "alice")
 }

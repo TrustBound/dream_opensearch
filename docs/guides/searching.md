@@ -73,7 +73,7 @@ The builders cover the common single queries. For anything more, you write the q
 
 Start with the part every search needs: send a query and turn the response into Gleam values. Write it once, and every search in the module uses it:
 
-### Search the books index and read the hits <a href="https://github.com/TrustBound/dream_opensearch/blob/3.0.0/test/snippets/guide_searching_books.gleam#L6-L63"><img align="right" alt="Tested snippet" src="https://img.shields.io/badge/%F0%9F%A7%AA_tested-snippet-lightgreen.svg?style=flat-square"></a>
+### Search the books index and read the hits <a href="https://github.com/TrustBound/dream_opensearch/blob/4.0.0/test/snippets/guide_searching_books.gleam#L6-L66"><img align="right" alt="Tested snippet" src="https://img.shields.io/badge/%F0%9F%A7%AA_tested-snippet-lightgreen.svg?style=flat-square"></a>
 
 ```gleam
 import dream_opensearch/client.{type Client}
@@ -99,7 +99,10 @@ pub fn search_books(
   index: String,
   query_json: String,
 ) -> Result(SearchResult, String) {
-  use body <- result.try(document.search(opensearch, index, query_json))
+  use body <- result.try(
+    document.search(opensearch, index, query_json)
+    |> result.map_error(client.describe_error),
+  )
   search_result_from_response(body)
 }
 
@@ -140,7 +143,7 @@ pub fn books_about(
 
 `books_about(opensearch, "books", "gleam")` sends this request:
 
-### The request of books_about <a href="https://github.com/TrustBound/dream_opensearch/blob/3.0.0/test/outputs/guide_searching_match_request.txt"><img align="right" alt="Tested snippet" src="https://img.shields.io/badge/%F0%9F%A7%AA_tested-snippet-lightgreen.svg?style=flat-square"></a>
+### The request of books_about <a href="https://github.com/TrustBound/dream_opensearch/blob/4.0.0/test/outputs/guide_searching_match_request.txt"><img align="right" alt="Tested snippet" src="https://img.shields.io/badge/%F0%9F%A7%AA_tested-snippet-lightgreen.svg?style=flat-square"></a>
 
 ```text
 POST /books/_search
@@ -149,7 +152,7 @@ POST /books/_search
 
 For an index that holds these two books, OpenSearch answers with this body:
 
-### The answer to the match query <a href="https://github.com/TrustBound/dream_opensearch/blob/3.0.0/test/outputs/guide_searching_match_response.txt"><img align="right" alt="Tested snippet" src="https://img.shields.io/badge/%F0%9F%A7%AA_tested-snippet-lightgreen.svg?style=flat-square"></a>
+### The answer to the match query <a href="https://github.com/TrustBound/dream_opensearch/blob/4.0.0/test/outputs/guide_searching_match_response.txt"><img align="right" alt="Tested snippet" src="https://img.shields.io/badge/%F0%9F%A7%AA_tested-snippet-lightgreen.svg?style=flat-square"></a>
 
 ```text
 {"took":1,"timed_out":false,"_shards":{"total":1,"successful":1,"skipped":0,"failed":0},"hits":{"total":{"value":2,"relation":"eq"},"max_score":0.21110919,"hits":[{"_index":"books","_id":"1","_score":0.21110919,"_source":{"title":"Programming Gleam","author":"Jo Lee","year":2024,"in_stock":true}},{"_index":"books","_id":"2","_score":0.160443,"_source":{"title":"Gleam for Erlang Developers","author":"Sam Park","year":2022,"in_stock":false}}]}}
@@ -164,7 +167,7 @@ The decoder reads two things from it:
 
 So `books_about` returns:
 
-### The result of books_about <a href="https://github.com/TrustBound/dream_opensearch/blob/3.0.0/test/outputs/guide_searching_books_about.txt"><img align="right" alt="Tested snippet" src="https://img.shields.io/badge/%F0%9F%A7%AA_tested-snippet-lightgreen.svg?style=flat-square"></a>
+### The result of books_about <a href="https://github.com/TrustBound/dream_opensearch/blob/4.0.0/test/outputs/guide_searching_books_about.txt"><img align="right" alt="Tested snippet" src="https://img.shields.io/badge/%F0%9F%A7%AA_tested-snippet-lightgreen.svg?style=flat-square"></a>
 
 ```text
 Ok(SearchResult(total: 2, books: [Book(id: "1", title: "Programming Gleam", author: "Jo Lee", year: 2024, in_stock: True), Book(id: "2", title: "Gleam for Erlang Developers", author: "Sam Park", year: 2022, in_stock: False)]))
@@ -178,7 +181,7 @@ Keep `total` and `books` apart in your head. OpenSearch returns 10 hits unless y
 
 A match query is right for words a person types. For a value that must be exact, such as an author's name from a list, use a term query. Add this to the module:
 
-### Find the books of one author <a href="https://github.com/TrustBound/dream_opensearch/blob/3.0.0/test/snippets/guide_searching_books.gleam#L65-L72"><img align="right" alt="Tested snippet" src="https://img.shields.io/badge/%F0%9F%A7%AA_tested-snippet-lightgreen.svg?style=flat-square"></a>
+### Find the books of one author <a href="https://github.com/TrustBound/dream_opensearch/blob/4.0.0/test/snippets/guide_searching_books.gleam#L68-L75"><img align="right" alt="Tested snippet" src="https://img.shields.io/badge/%F0%9F%A7%AA_tested-snippet-lightgreen.svg?style=flat-square"></a>
 
 ```gleam
 /// The books of one author, spelled exactly as stored.
@@ -193,7 +196,7 @@ pub fn books_by(
 
 `books_by(opensearch, "books", "Jo Lee")` sends:
 
-### The request of books_by <a href="https://github.com/TrustBound/dream_opensearch/blob/3.0.0/test/outputs/guide_searching_term_request.txt"><img align="right" alt="Tested snippet" src="https://img.shields.io/badge/%F0%9F%A7%AA_tested-snippet-lightgreen.svg?style=flat-square"></a>
+### The request of books_by <a href="https://github.com/TrustBound/dream_opensearch/blob/4.0.0/test/outputs/guide_searching_term_request.txt"><img align="right" alt="Tested snippet" src="https://img.shields.io/badge/%F0%9F%A7%AA_tested-snippet-lightgreen.svg?style=flat-square"></a>
 
 ```text
 POST /books/_search
@@ -210,7 +213,7 @@ A `text` field is different. OpenSearch splits it into lower-case words when it 
 
 To find the books from a span of years, use a range query:
 
-### Find the books published between two years <a href="https://github.com/TrustBound/dream_opensearch/blob/3.0.0/test/snippets/guide_searching_books.gleam#L74-L84"><img align="right" alt="Tested snippet" src="https://img.shields.io/badge/%F0%9F%A7%AA_tested-snippet-lightgreen.svg?style=flat-square"></a>
+### Find the books published between two years <a href="https://github.com/TrustBound/dream_opensearch/blob/4.0.0/test/snippets/guide_searching_books.gleam#L77-L87"><img align="right" alt="Tested snippet" src="https://img.shields.io/badge/%F0%9F%A7%AA_tested-snippet-lightgreen.svg?style=flat-square"></a>
 
 ```gleam
 /// The books published from `first_year` to `last_year`, both included.
@@ -228,7 +231,7 @@ pub fn books_published_between(
 
 `books_published_between(opensearch, "books", 2020, 2024)` sends:
 
-### The request of books_published_between <a href="https://github.com/TrustBound/dream_opensearch/blob/3.0.0/test/outputs/guide_searching_range_request.txt"><img align="right" alt="Tested snippet" src="https://img.shields.io/badge/%F0%9F%A7%AA_tested-snippet-lightgreen.svg?style=flat-square"></a>
+### The request of books_published_between <a href="https://github.com/TrustBound/dream_opensearch/blob/4.0.0/test/outputs/guide_searching_range_request.txt"><img align="right" alt="Tested snippet" src="https://img.shields.io/badge/%F0%9F%A7%AA_tested-snippet-lightgreen.svg?style=flat-square"></a>
 
 ```text
 POST /books/_search
@@ -243,7 +246,7 @@ Both bounds are included: `gte` means greater than or equal, and `lte` means les
 
 A real search screen asks for more than one thing at once: books about Gleam, in stock, from 2020 on, newest first, ten to a page. That is a bool query with paging and a sort. The builders return complete bodies, so you cannot nest one in another. Build the whole body with `gleam/json` instead:
 
-### Build a bool query with paging and sorting <a href="https://github.com/TrustBound/dream_opensearch/blob/3.0.0/test/snippets/guide_searching_bool.gleam#L5-L61"><img align="right" alt="Tested snippet" src="https://img.shields.io/badge/%F0%9F%A7%AA_tested-snippet-lightgreen.svg?style=flat-square"></a>
+### Build a bool query with paging and sorting <a href="https://github.com/TrustBound/dream_opensearch/blob/4.0.0/test/snippets/guide_searching_bool.gleam#L5-L61"><img align="right" alt="Tested snippet" src="https://img.shields.io/badge/%F0%9F%A7%AA_tested-snippet-lightgreen.svg?style=flat-square"></a>
 
 ```gleam
 import gleam/json
@@ -315,7 +318,7 @@ The parts of the body:
 
 `in_stock_query("gleam", 2020, 1, 10)` returns this body:
 
-### The body of in_stock_query <a href="https://github.com/TrustBound/dream_opensearch/blob/3.0.0/test/outputs/guide_searching_in_stock_query.txt"><img align="right" alt="Tested snippet" src="https://img.shields.io/badge/%F0%9F%A7%AA_tested-snippet-lightgreen.svg?style=flat-square"></a>
+### The body of in_stock_query <a href="https://github.com/TrustBound/dream_opensearch/blob/4.0.0/test/outputs/guide_searching_in_stock_query.txt"><img align="right" alt="Tested snippet" src="https://img.shields.io/badge/%F0%9F%A7%AA_tested-snippet-lightgreen.svg?style=flat-square"></a>
 
 ```text
 {"query":{"bool":{"must":[{"match":{"title":"gleam"}}],"filter":[{"term":{"in_stock":true}},{"range":{"year":{"gte":2020}}}]}},"from":0,"size":10,"sort":[{"year":{"order":"desc"}}]}
@@ -327,11 +330,11 @@ Note that `in_stock_query` sends no request. It is a plain function from your pa
 
 ## When a search fails
 
-`search_books` returns `Error(String)` in three kinds of cases.
+`search_books` returns `Error(String)` in three kinds of cases. For a failed request, the string is the text of `client.describe_error`. For an answer of OpenSearch with status 400 or more, that text is `OpenSearch rejected the request with status <status>: ` and then the response body.
 
-**The index does not exist.** OpenSearch answers with status 404, and the error is the response body:
+**The index does not exist.** OpenSearch answers with status 404, and the error holds this response body:
 
-### The answer for a missing index <a href="https://github.com/TrustBound/dream_opensearch/blob/3.0.0/test/outputs/guide_searching_missing_index.txt"><img align="right" alt="Tested snippet" src="https://img.shields.io/badge/%F0%9F%A7%AA_tested-snippet-lightgreen.svg?style=flat-square"></a>
+### The answer for a missing index <a href="https://github.com/TrustBound/dream_opensearch/blob/4.0.0/test/outputs/guide_searching_missing_index.txt"><img align="right" alt="Tested snippet" src="https://img.shields.io/badge/%F0%9F%A7%AA_tested-snippet-lightgreen.svg?style=flat-square"></a>
 
 ```text
 {"error":{"root_cause":[{"type":"index_not_found_exception","reason":"no such index [books]","index":"books","resource.id":"books","resource.type":"index_or_alias","index_uuid":"_na_"}],"type":"index_not_found_exception","reason":"no such index [books]","index":"books","resource.id":"books","resource.type":"index_or_alias","index_uuid":"_na_"},"status":404}
@@ -339,7 +342,7 @@ Note that `in_stock_query` sends no request. It is a plain function from your pa
 
 **OpenSearch cannot read the query.** A misspelled query type, such as `matches` for `match`, gets status 400 and a body that says where the problem is:
 
-### The answer to a misspelled query <a href="https://github.com/TrustBound/dream_opensearch/blob/3.0.0/test/outputs/guide_searching_parse_error.txt"><img align="right" alt="Tested snippet" src="https://img.shields.io/badge/%F0%9F%A7%AA_tested-snippet-lightgreen.svg?style=flat-square"></a>
+### The answer to a misspelled query <a href="https://github.com/TrustBound/dream_opensearch/blob/4.0.0/test/outputs/guide_searching_parse_error.txt"><img align="right" alt="Tested snippet" src="https://img.shields.io/badge/%F0%9F%A7%AA_tested-snippet-lightgreen.svg?style=flat-square"></a>
 
 ```text
 {"error":{"root_cause":[{"type":"parsing_exception","reason":"unknown query [matches] did you mean any of [match, match_all]?","line":1,"col":21}],"type":"parsing_exception","reason":"unknown query [matches] did you mean any of [match, match_all]?","line":1,"col":21,"caused_by":{"type":"named_object_not_found_exception","reason":"[1:21] unknown field [matches]"}},"status":400}
@@ -362,7 +365,7 @@ The search module also has two parts that you can test with no cluster at all:
 
 Add `dream_test` as a dev dependency, with the version range that this package tests with:
 
-### The dev dependency on dream_test <a href="https://github.com/TrustBound/dream_opensearch/blob/3.0.0/gleam.toml#L26-L27"><img align="right" alt="Tested snippet" src="https://img.shields.io/badge/%F0%9F%A7%AA_tested-snippet-lightgreen.svg?style=flat-square"></a>
+### The dev dependency on dream_test <a href="https://github.com/TrustBound/dream_opensearch/blob/4.0.0/gleam.toml#L27-L28"><img align="right" alt="Tested snippet" src="https://img.shields.io/badge/%F0%9F%A7%AA_tested-snippet-lightgreen.svg?style=flat-square"></a>
 
 ```toml
 [dev-dependencies]
@@ -371,7 +374,7 @@ dream_test = ">= 3.0.0 and < 4.0.0"
 
 Here is a test module for both parts:
 
-### Test a query builder and the response reader <a href="https://github.com/TrustBound/dream_opensearch/blob/3.0.0/test/snippets/guide_searching_testing.gleam#L5-L59"><img align="right" alt="Tested snippet" src="https://img.shields.io/badge/%F0%9F%A7%AA_tested-snippet-lightgreen.svg?style=flat-square"></a>
+### Test a query builder and the response reader <a href="https://github.com/TrustBound/dream_opensearch/blob/4.0.0/test/snippets/guide_searching_testing.gleam#L5-L59"><img align="right" alt="Tested snippet" src="https://img.shields.io/badge/%F0%9F%A7%AA_tested-snippet-lightgreen.svg?style=flat-square"></a>
 
 ```gleam
 import dream_test/matchers.{be_equal, or_fail_with, should}

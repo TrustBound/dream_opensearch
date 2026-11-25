@@ -31,7 +31,7 @@ pub fn tests() -> TestSuite {
     it("returns the connection error when no cluster listens", fn() {
       // Arrange
       // Nothing listens on port 1
-      let opensearch = client.new("http://127.0.0.1:1")
+      let assert Ok(opensearch) = client.new("http://127.0.0.1:1")
 
       // Act
       let users = find_users_by_name(opensearch, "users", "alice")
@@ -39,7 +39,9 @@ pub fn tests() -> TestSuite {
       // Assert
       users
       |> should
-      |> be_equal(Error("Connection failed: Connection refused"))
+      |> be_equal(Error(
+        "OpenSearch is unavailable: Connection failed: Connection refused",
+      ))
       |> or_fail_with("Expected a refused connection")
     }),
   ])

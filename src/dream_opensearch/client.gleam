@@ -6,23 +6,36 @@
 ////
 //// ## Quick Start
 ////
-//// ### Create a client and index a document <a href="https://github.com/TrustBound/dream_opensearch/blob/3.0.0/test/snippets/doc_client_quick_start.gleam#L3-L15"><img align="right" alt="Tested snippet" src="https://img.shields.io/badge/%F0%9F%A7%AA_tested-snippet-lightgreen.svg?style=flat-square"></a>
+//// ### Create a client and index a document <a href="https://github.com/TrustBound/dream_opensearch/blob/4.0.0/test/snippets/doc_client_quick_start.gleam#L3-L15"><img align="right" alt="Tested snippet" src="https://img.shields.io/badge/%F0%9F%A7%AA_tested-snippet-lightgreen.svg?style=flat-square"></a>
 ////
 //// ```gleam
-//// import dream_opensearch/client.{type Client}
+//// import dream_opensearch/client.{type Client, type OpenSearchError}
 //// import dream_opensearch/document
 ////
-//// pub fn create_client() -> Client {
+//// pub fn create_client() -> Result(Client, OpenSearchError) {
 ////   client.new("http://localhost:9200")
 //// }
 ////
 //// pub fn index_alice(
 ////   opensearch: Client,
 ////   index: String,
-//// ) -> Result(String, String) {
+//// ) -> Result(String, OpenSearchError) {
 ////   document.index(opensearch, index, "123", "{\"name\":\"Alice\"}")
 //// }
 //// ```
+////
+//// ## Two ways to make a client
+////
+//// - `new` takes a base URL, such as `http://localhost:9200`. It checks the
+////   URL one time and returns `Error(InvalidUrl(..))` when it cannot use it.
+//// - `from_request` takes a dream_http_client `ClientRequest`. Use it to set
+////   what a URL cannot hold: a timeout, a connection pool, a certificate
+////   authority file, other headers, or a recorder for tests.
+////
+//// Each request of the client starts from the same base request. It keeps
+//// the scheme, the host, the port, the headers, the timeouts and the
+//// recorder of the base request, and sets the method, the path, the query
+//// and the body.
 ////
 //// ## Base URL
 ////
@@ -37,10 +50,17 @@
 //// Percent-encode `@`, `:` and `/` in the user name or password (`%40`,
 //// `%3A`, `%2F`). The client decodes them before it builds the
 //// `authorization` header.
+////
+//// ## Errors
+////
+//// Every function returns `OpenSearchError` for a failure. Match on its
+//// variants to decide what to do, and use `describe_error` for a log line.
 
 import dream_http_client/client as http_client
 import gleam/bit_array
 import gleam/http
+import gleam/int
+import gleam/list
 import gleam/option.{type Option, None, Some}
 import gleam/result
 import gleam/string
@@ -48,30 +68,68 @@ import gleam/uri
 
 /// OpenSearch client configuration
 ///
-/// Represents a connection to an OpenSearch cluster. The client stores the
-/// base URL and handles HTTP communication with the cluster.
+/// A connection to an OpenSearch cluster: the base request that every
+/// request of the client starts from. Make one with `new` or
+/// `from_request`, and read the base request with `base_request`.
 ///
-/// ## Fields
-///
-/// - `base_url`: The base URL of the OpenSearch cluster (without trailing
-///   slash), as given to `new`. It keeps any user name and password; do not
-///   print or log it.
-pub type Client {
-  /// A client for the cluster at `base_url`. Build it with `new`, which
-  /// removes a trailing slash.
-  Client(base_url: String)
+/// The type is opaque, so a `Client` always holds a base request that `new`
+/// or `from_request` made.
+pub opaque type Client {
+  Client(base: http_client.ClientRequest)
 }
 
-/// Create a new OpenSearch client
+/// Why an OpenSearch request failed.
 ///
-/// Creates a client configured to connect to the specified OpenSearch cluster.
-/// The base URL should include the protocol and port (e.g., `http://localhost:9200`).
+/// No variant holds the user name or the password of the base URL.
 ///
-/// Any trailing slash in the URL is automatically removed. The URL is not
-/// checked here: `send_request` parses it on each request.
+/// ## Variants
+///
+/// - `InvalidUrl`: `new` cannot use the base URL. `reason` says why, for
+///   example `the URL has no host`. Only `new` returns it, and no request is
+///   sent.
+/// - `Unavailable`: the request got no HTTP answer. The connection was
+///   refused or closed, the host name did not resolve, the TLS handshake
+///   failed, or the HTTP/2 stream or connection failed. `reason` is the
+///   text of the dream_http_client transport error, for example
+///   `Connection failed: Connection refused`.
+/// - `TimedOut`: no answer came within the timeout of the request, which is
+///   30000 ms unless the base request sets another. The request was sent,
+///   and the cluster can still finish it. `timeout_ms` is that timeout.
+/// - `Rejected`: OpenSearch answered with status 400 or more. `body` is its
+///   answer, which usually holds the error details as JSON.
+/// - `InvalidResponseBody`: the answer body is not valid UTF-8. `status` is
+///   the status of the answer, with any value.
+/// - `NoRecording`: the base request has a dream_http_client recorder in
+///   playback mode, and no recording matches the request. Nothing is sent.
+///   `method` and `url` name the request, and `details` is the text of
+///   dream_http_client, which shows the nearest recordings.
+pub type OpenSearchError {
+  /// `new` cannot use the base URL.
+  InvalidUrl(reason: String)
+  /// The request got no HTTP answer.
+  Unavailable(reason: String)
+  /// No answer came within the timeout of the request.
+  TimedOut(timeout_ms: Int)
+  /// OpenSearch answered with status 400 or more.
+  Rejected(status: Int, body: String)
+  /// The answer body is not valid UTF-8.
+  InvalidResponseBody(status: Int)
+  /// A playback recorder has no recording for the request.
+  NoRecording(method: String, url: String, details: String)
+}
+
+/// Create a new OpenSearch client from a base URL
+///
+/// The base URL must have the scheme `http` or `https` and a host. It can
+/// have a port, a path prefix, and a user name and password. A trailing
+/// slash is removed.
 ///
 /// A user name and password in the URL (`https://user:pass@host:9200`) make
-/// every request send HTTP Basic authentication. See `send_request`.
+/// every request send the header
+/// `authorization: Basic <base64(user:password)>`. The user name and
+/// password are percent-decoded first, and a URL with no password sends an
+/// empty password. They are not sent in the request line or the `host`
+/// header.
 ///
 /// ## Parameters
 ///
@@ -79,33 +137,130 @@ pub type Client {
 ///
 /// ## Returns
 ///
-/// A new `Client` configured for the specified cluster.
+/// - `Ok(Client)`: a client for the cluster at `base_url`.
+/// - `Error(InvalidUrl(reason))`: the URL cannot be used. `reason` is one of:
+///   - `the URL cannot be parsed`
+///   - `the URL scheme must be http or https`
+///   - `the URL has no host`
+///   - `the URL has a query or a fragment`
+///   - `the user name or password has invalid percent-encoding`
+///
+/// No reason contains the user name or password.
 ///
 /// ## See Also
 ///
+/// - `from_request`: makes a client from a dream_http_client request.
 /// - `send_request`: sends a request to the cluster of this client.
 ///
 /// ## Example
 ///
-/// ### Create a client <a href="https://github.com/TrustBound/dream_opensearch/blob/3.0.0/test/snippets/doc_client_new.gleam#L3-L11"><img align="right" alt="Tested snippet" src="https://img.shields.io/badge/%F0%9F%A7%AA_tested-snippet-lightgreen.svg?style=flat-square"></a>
+/// ### Create a client <a href="https://github.com/TrustBound/dream_opensearch/blob/4.0.0/test/snippets/doc_client_new.gleam#L3-L11"><img align="right" alt="Tested snippet" src="https://img.shields.io/badge/%F0%9F%A7%AA_tested-snippet-lightgreen.svg?style=flat-square"></a>
 ///
 /// ```gleam
-/// import dream_opensearch/client.{type Client}
+/// import dream_opensearch/client.{type Client, type OpenSearchError}
 ///
-/// pub fn create_local_client() -> Client {
+/// pub fn create_local_client() -> Result(Client, OpenSearchError) {
 ///   client.new("http://localhost:9200")
 /// }
 ///
-/// pub fn create_client_with_credentials() -> Client {
+/// pub fn create_client_with_credentials() -> Result(Client, OpenSearchError) {
 ///   client.new("https://user:pass@search.example.com:9200")
 /// }
 /// ```
-pub fn new(base_url: String) -> Client {
-  let trimmed = case string.ends_with(base_url, "/") {
-    True -> string.drop_end(base_url, 1)
-    False -> base_url
-  }
-  Client(base_url: trimmed)
+pub fn new(base_url: String) -> Result(Client, OpenSearchError) {
+  use parsed <- result.try(
+    uri.parse(base_url) |> invalid_url("the URL cannot be parsed"),
+  )
+  use scheme <- result.try(parse_scheme(parsed.scheme))
+  use host <- result.try(
+    option.to_result(parsed.host, Nil) |> invalid_url("the URL has no host"),
+  )
+  use Nil <- result.try(reject_query_and_fragment(parsed))
+  use authorization <- result.try(parse_authorization(parsed.userinfo))
+  http_client.new()
+  |> http_client.scheme(scheme)
+  |> http_client.host(host)
+  |> add_port(parsed.port)
+  |> http_client.path(trim_trailing_slash(parsed.path))
+  |> add_authorization(authorization)
+  |> from_request
+  |> Ok
+}
+
+/// Create a new OpenSearch client from a dream_http_client request
+///
+/// Every request of the client starts from `base`. It keeps the scheme, the
+/// host, the port, the headers, the timeouts, the connection pool, the
+/// certificate authority file and the recorder of `base`. For each request,
+/// the client sets the method, the body and the header
+/// `content-type: application/json`, which replaces a `content-type` header
+/// of `base`. The path of the request is the path of `base` with the API
+/// path added after it, so the path of `base` is a prefix. A query in the
+/// API path replaces the query of `base`.
+///
+/// ## Parameters
+///
+/// - `base`: The dream_http_client request that every request starts from
+///
+/// ## Returns
+///
+/// A `Client` for the cluster of `base`.
+///
+/// ## See Also
+///
+/// - `new`: makes a client from a base URL.
+/// - `base_request`: reads the base request back.
+///
+/// ## Example
+///
+/// ### Create a client with a timeout and a recorder <a href="https://github.com/TrustBound/dream_opensearch/blob/4.0.0/test/snippets/doc_client_from_request.gleam#L3-L16"><img align="right" alt="Tested snippet" src="https://img.shields.io/badge/%F0%9F%A7%AA_tested-snippet-lightgreen.svg?style=flat-square"></a>
+///
+/// ```gleam
+/// import dream_http_client/client as http_client
+/// import dream_http_client/recorder.{type Recorder}
+/// import dream_opensearch/client.{type Client}
+/// import gleam/http
+///
+/// pub fn create_recorded_client(recorder: Recorder) -> Client {
+///   http_client.new()
+///   |> http_client.scheme(http.Http)
+///   |> http_client.host("localhost")
+///   |> http_client.port(9201)
+///   |> http_client.timeout(5000)
+///   |> http_client.recorder(recorder)
+///   |> client.from_request
+/// }
+/// ```
+pub fn from_request(base: http_client.ClientRequest) -> Client {
+  Client(base: http_client.path(
+    base,
+    trim_trailing_slash(http_client.get_path(base)),
+  ))
+}
+
+/// The base request of a client
+///
+/// Returns the dream_http_client request that every request of `client`
+/// starts from. For a client from `new`, it holds the scheme, the host, the
+/// port, the path prefix and the `authorization` header of the base URL.
+///
+/// The `authorization` header holds the password in base64. Do not print or
+/// log it.
+///
+/// ## Example
+///
+/// ### Read the host of a client <a href="https://github.com/TrustBound/dream_opensearch/blob/4.0.0/test/snippets/doc_client_base_request.gleam#L3-L8"><img align="right" alt="Tested snippet" src="https://img.shields.io/badge/%F0%9F%A7%AA_tested-snippet-lightgreen.svg?style=flat-square"></a>
+///
+/// ```gleam
+/// import dream_http_client/client as http_client
+/// import dream_opensearch/client.{type Client}
+///
+/// pub fn host_of(opensearch: Client) -> String {
+///   http_client.get_host(client.base_request(opensearch))
+/// }
+/// ```
+pub fn base_request(client: Client) -> http_client.ClientRequest {
+  client.base
 }
 
 /// Send HTTP request to OpenSearch
@@ -114,22 +269,17 @@ pub fn new(base_url: String) -> Client {
 /// `dream_opensearch/document` module uses it for every operation. Most
 /// applications should use that module instead.
 ///
-/// The request automatically includes the `Content-Type: application/json` header.
-///
-/// When the base URL has a user name, the request also has the header
-/// `authorization: Basic <base64(user:password)>`. The user name and password
-/// are percent-decoded first, and a URL with no password sends an empty
-/// password. The user name and password are not sent in the request line or
-/// the `host` header. A base URL with no user name sends no `authorization`
-/// header.
+/// The request starts from the base request of the client (see
+/// `from_request`) and has the header `content-type: application/json`.
 ///
 /// ## Parameters
 ///
 /// - `client`: The OpenSearch client
 /// - `method`: The HTTP method (GET, POST, PUT, DELETE, etc.)
 /// - `path`: The API path (e.g., "/users/_doc/123" or "/users/_search"),
-///   sent as it is. This function does not percent-encode it: encode an
-///   index name or a document ID with characters outside `A-Z a-z 0-9 - . _ ~`
+///   sent after the path prefix of the client as it is. A `?` starts the
+///   query. This function does not percent-encode the path: encode an index
+///   name or a document ID with characters outside `A-Z a-z 0-9 - . _ ~`
 ///   yourself. The `dream_opensearch/document` functions encode them for
 ///   you.
 /// - `body`: The request body as a JSON string
@@ -137,48 +287,48 @@ pub fn new(base_url: String) -> Client {
 /// ## Returns
 ///
 /// - `Ok(String)`: The response body as a string (status < 400)
-/// - `Error(String)`: See Errors.
+/// - `Error(OpenSearchError)`: See Errors.
 ///
 /// ## Errors
 ///
-/// - The response status is 400 or more: the response body, unchanged.
-/// - The connection fails: `Connection failed: <reason>`, for example
+/// - `Rejected(status, body)`: the response status is 400 or more. `body`
+///   is the response body, unchanged.
+/// - `Unavailable(reason)`: the request got no answer. For example
 ///   `Connection failed: Connection refused`, or
 ///   `Connection failed: DNS resolution failed (NXDOMAIN)` for a host name
-///   that does not resolve. No request is sent.
-/// - The server closes the connection with no answer:
-///   `Remote closed connection`. For GET, HEAD, PUT and DELETE, the HTTP
-///   client sends the request once more on a new connection before it
-///   returns this error. It sends a POST one time only.
-/// - The server sends no answer for 30 seconds:
-///   `Timed out after 30000ms`. The request was sent, and the cluster can
-///   still finish it.
-/// - The response body is not valid UTF-8, with any status:
-///   `The OpenSearch response body is not valid UTF-8`.
-/// - The URL cannot be parsed:
-///   `Invalid OpenSearch URL: the URL cannot be parsed`. No request is sent.
-/// - The URL has no host: `Invalid OpenSearch URL: the URL has no host`. No
-///   request is sent.
-/// - The user name or password has invalid percent-encoding:
-///   `Invalid credentials in the OpenSearch URL: the user name or password has invalid percent-encoding`.
-///   No request is sent.
+///   that does not resolve. When the server closes the connection with no
+///   answer, the reason is `Remote closed connection`: for GET, HEAD, PUT
+///   and DELETE, the HTTP client sends the request once more on a new
+///   connection before it returns this error. It sends a POST one time
+///   only.
+/// - `TimedOut(timeout_ms)`: the server sent no answer within the timeout
+///   (30000 ms unless the base request sets another). The request was sent,
+///   and the cluster can still finish it.
+/// - `InvalidResponseBody(status)`: the response body is not valid UTF-8,
+///   with any status.
+/// - `NoRecording(method, url, details)`: a playback recorder of the base
+///   request has no recording for the request. Nothing is sent.
 ///
-/// No error message contains the user name or password.
+/// No error contains the user name or password of the base URL.
 ///
 /// ## See Also
 ///
-/// - `new`: creates the client.
+/// - `new` and `from_request`: create the client.
+/// - `describe_error`: turns an error into one line of text.
 /// - `dream_opensearch/document`: the operations built on this function.
 ///
 /// ## Example
 ///
-/// ### Get a document <a href="https://github.com/TrustBound/dream_opensearch/blob/3.0.0/test/snippets/doc_client_send_request.gleam#L3-L8"><img align="right" alt="Tested snippet" src="https://img.shields.io/badge/%F0%9F%A7%AA_tested-snippet-lightgreen.svg?style=flat-square"></a>
+/// ### Get a document <a href="https://github.com/TrustBound/dream_opensearch/blob/4.0.0/test/snippets/doc_client_send_request.gleam#L3-L11"><img align="right" alt="Tested snippet" src="https://img.shields.io/badge/%F0%9F%A7%AA_tested-snippet-lightgreen.svg?style=flat-square"></a>
 ///
 /// ```gleam
-/// import dream_opensearch/client.{type Client}
+/// import dream_opensearch/client.{type Client, type OpenSearchError}
 /// import gleam/http
 ///
-/// pub fn get_user(opensearch: Client, index: String) -> Result(String, String) {
+/// pub fn get_user(
+///   opensearch: Client,
+///   index: String,
+/// ) -> Result(String, OpenSearchError) {
 ///   client.send_request(opensearch, http.Get, "/" <> index <> "/_doc/123", "")
 /// }
 /// ```
@@ -187,66 +337,98 @@ pub fn send_request(
   method: http.Method,
   path: String,
   body: String,
-) -> Result(String, String) {
-  use target <- result.try(parse_target(client.base_url <> path))
-  target
-  |> build_request(method, body)
+) -> Result(String, OpenSearchError) {
+  client.base
+  |> build_request(method, path, body)
   |> http_client.send
   |> response_to_result
 }
 
-/// Where a request goes, parsed from the base URL and the API path.
+/// Turn an error into one line of text
 ///
-/// `authorization` holds the full `authorization` header value when the URL
-/// has a user name. The user name and password never go in any other field.
-type Target {
-  Target(
-    scheme: http.Scheme,
-    host: String,
-    port: Option(Int),
-    path: String,
-    query: Option(String),
-    authorization: Option(String),
-  )
-}
-
-fn parse_target(url: String) -> Result(Target, String) {
-  use parsed <- result.try(
-    uri.parse(url)
-    |> result.replace_error("Invalid OpenSearch URL: the URL cannot be parsed"),
-  )
-  use host <- result.try(option.to_result(
-    parsed.host,
-    "Invalid OpenSearch URL: the URL has no host",
-  ))
-  use authorization <- result.try(parse_authorization(parsed.userinfo))
-  Ok(Target(
-    scheme: parse_scheme(parsed.scheme),
-    host: host,
-    port: parsed.port,
-    path: path_or_root(parsed.path),
-    query: parsed.query,
-    authorization: authorization,
-  ))
-}
-
-fn parse_scheme(scheme: Option(String)) -> http.Scheme {
-  case scheme {
-    Some("https") -> http.Https
-    _ -> http.Http
+/// The text names the kind of failure and its details, for a log or a
+/// message to an operator. It never holds the user name or password of the
+/// base URL. A `Rejected` error holds the body of the OpenSearch answer.
+///
+/// ## Returns
+///
+/// - `InvalidUrl(reason)`: `Invalid OpenSearch URL: <reason>`
+/// - `Unavailable(reason)`: `OpenSearch is unavailable: <reason>`
+/// - `TimedOut(timeout_ms)`: `OpenSearch sent no answer within <timeout_ms> ms`
+/// - `Rejected(status, body)`: `OpenSearch rejected the request with status <status>: <body>`
+/// - `InvalidResponseBody(status)`: `The OpenSearch response body is not valid UTF-8 (status <status>)`
+/// - `NoRecording(method, url, details)`: `No recording for the OpenSearch request: <details>`.
+///   `details` can have more than one line.
+///
+/// ## Example
+///
+/// ### Log an error <a href="https://github.com/TrustBound/dream_opensearch/blob/4.0.0/test/snippets/doc_client_describe_error.gleam#L3-L11"><img align="right" alt="Tested snippet" src="https://img.shields.io/badge/%F0%9F%A7%AA_tested-snippet-lightgreen.svg?style=flat-square"></a>
+///
+/// ```gleam
+/// import dream_opensearch/client.{type Client}
+/// import gleam/http
+///
+/// pub fn health_line(opensearch: Client) -> String {
+///   case client.send_request(opensearch, http.Get, "/_cluster/health", "") {
+///     Ok(_body) -> "OpenSearch is healthy"
+///     Error(error) -> client.describe_error(error)
+///   }
+/// }
+/// ```
+pub fn describe_error(error: OpenSearchError) -> String {
+  case error {
+    InvalidUrl(reason:) -> "Invalid OpenSearch URL: " <> reason
+    Unavailable(reason:) -> "OpenSearch is unavailable: " <> reason
+    TimedOut(timeout_ms:) ->
+      "OpenSearch sent no answer within " <> int.to_string(timeout_ms) <> " ms"
+    Rejected(status:, body:) ->
+      "OpenSearch rejected the request with status "
+      <> int.to_string(status)
+      <> ": "
+      <> body
+    InvalidResponseBody(status:) ->
+      "The OpenSearch response body is not valid UTF-8 (status "
+      <> int.to_string(status)
+      <> ")"
+    NoRecording(details:, ..) ->
+      "No recording for the OpenSearch request: " <> details
   }
 }
 
-fn path_or_root(path: String) -> String {
-  case path {
-    "" -> "/"
-    _ -> path
+fn invalid_url(
+  outcome: Result(value, Nil),
+  reason: String,
+) -> Result(value, OpenSearchError) {
+  result.replace_error(outcome, InvalidUrl(reason:))
+}
+
+fn parse_scheme(
+  scheme: Option(String),
+) -> Result(http.Scheme, OpenSearchError) {
+  case scheme {
+    Some("http") -> Ok(http.Http)
+    Some("https") -> Ok(http.Https)
+    _ -> Error(InvalidUrl(reason: "the URL scheme must be http or https"))
+  }
+}
+
+fn reject_query_and_fragment(parsed: uri.Uri) -> Result(Nil, OpenSearchError) {
+  case parsed.query, parsed.fragment {
+    None, None -> Ok(Nil)
+    _, _ -> Error(InvalidUrl(reason: "the URL has a query or a fragment"))
+  }
+}
+
+fn trim_trailing_slash(path: String) -> String {
+  case string.ends_with(path, "/") {
+    True -> string.drop_end(path, 1)
+    False -> path
   }
 }
 
 fn parse_authorization(
   userinfo: Option(String),
-) -> Result(Option(String), String) {
+) -> Result(Option(String), OpenSearchError) {
   case userinfo {
     None -> Ok(None)
     Some(encoded_userinfo) ->
@@ -259,21 +441,20 @@ fn parse_authorization(
 
 /// Splits `user:password` at the first `:` and percent-decodes both parts.
 /// A userinfo with no `:` is a user name with an empty password.
-/// The error message never holds the user name or the password.
+/// The error never holds the user name or the password.
 fn decode_credentials(
   encoded_userinfo: String,
-) -> Result(#(String, String), String) {
+) -> Result(#(String, String), OpenSearchError) {
   let #(encoded_user, encoded_password) =
     string.split_once(encoded_userinfo, on: ":")
     |> result.unwrap(#(encoded_userinfo, ""))
   let invalid_encoding =
-    "Invalid credentials in the OpenSearch URL: the user name or password has invalid percent-encoding"
+    "the user name or password has invalid percent-encoding"
   use user <- result.try(
-    uri.percent_decode(encoded_user) |> result.replace_error(invalid_encoding),
+    uri.percent_decode(encoded_user) |> invalid_url(invalid_encoding),
   )
   use password <- result.try(
-    uri.percent_decode(encoded_password)
-    |> result.replace_error(invalid_encoding),
+    uri.percent_decode(encoded_password) |> invalid_url(invalid_encoding),
   )
   Ok(#(user, password))
 }
@@ -288,20 +469,41 @@ fn basic_authorization(credentials: #(String, String)) -> String {
 }
 
 fn build_request(
-  target: Target,
+  base: http_client.ClientRequest,
   method: http.Method,
+  path: String,
   body: String,
 ) -> http_client.ClientRequest {
-  http_client.new()
+  let #(api_path, query) = split_query(path)
+  base
   |> http_client.method(method)
-  |> http_client.scheme(target.scheme)
-  |> http_client.host(target.host)
-  |> add_port(target.port)
-  |> http_client.path(target.path)
-  |> add_query(target.query)
+  |> http_client.path(root_if_empty(http_client.get_path(base) <> api_path))
+  |> add_query(query)
+  |> http_client.headers(without_content_type(http_client.get_headers(base)))
   |> http_client.add_header("content-type", "application/json")
-  |> add_authorization(target.authorization)
   |> http_client.body(body)
+}
+
+fn split_query(path: String) -> #(String, Option(String)) {
+  case string.split_once(path, on: "?") {
+    Ok(#(api_path, query)) -> #(api_path, Some(query))
+    Error(Nil) -> #(path, None)
+  }
+}
+
+fn root_if_empty(path: String) -> String {
+  case path {
+    "" -> "/"
+    _ -> path
+  }
+}
+
+fn without_content_type(
+  headers: List(http_client.Header),
+) -> List(http_client.Header) {
+  list.filter(headers, fn(header) {
+    string.lowercase(header.name) != "content-type"
+  })
 }
 
 fn add_port(
@@ -337,19 +539,47 @@ fn add_authorization(
 
 fn response_to_result(
   response: Result(http_client.HttpResponse, http_client.SendError),
-) -> Result(String, String) {
+) -> Result(String, OpenSearchError) {
   case response {
     Ok(response) -> body_text(response)
     Error(http_client.ResponseError(response: response)) ->
-      body_text(response) |> result.try(Error)
+      body_text(response) |> result.try(rejected(response.status, _))
     Error(http_client.RequestError(error: transport_error)) ->
-      Error(http_client.transport_error_to_string(transport_error))
+      Error(from_transport_error(transport_error))
   }
+}
+
+fn rejected(status: Int, body: String) -> Result(String, OpenSearchError) {
+  Error(Rejected(status:, body:))
 }
 
 // OpenSearch answers with JSON, which is UTF-8. A body that is not UTF-8 has
 // no text form, so it is an error.
-fn body_text(response: http_client.HttpResponse) -> Result(String, String) {
+fn body_text(
+  response: http_client.HttpResponse,
+) -> Result(String, OpenSearchError) {
   http_client.body_text(response)
-  |> result.replace_error("The OpenSearch response body is not valid UTF-8")
+  |> result.replace_error(InvalidResponseBody(status: response.status))
+}
+
+// Each variant of `http_client.TransportError` is named, with no catch-all,
+// so a new variant in dream_http_client is a compile error here.
+fn from_transport_error(error: http_client.TransportError) -> OpenSearchError {
+  case error {
+    http_client.TimedOut(timeout_ms:) -> TimedOut(timeout_ms:)
+    http_client.NoRecording(method:, url:, ..) ->
+      NoRecording(
+        method:,
+        url:,
+        details: http_client.transport_error_to_string(error),
+      )
+    http_client.ConnectFailed(..)
+    | http_client.RemoteClosed
+    | http_client.StreamReset(..)
+    | http_client.Goaway(..)
+    | http_client.ConnectionError(..)
+    | http_client.ProcessDown(..)
+    | http_client.Unexpected(..) ->
+      Unavailable(reason: http_client.transport_error_to_string(error))
+  }
 }

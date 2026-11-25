@@ -1,58 +1,48 @@
-//// Guide: Handling errors, steps 2 to 4
+//// Guide: Handling errors, steps 2 and 3
 ////
-//// Turns the error string of dream_opensearch into a typed error, and
-//// decides which errors are worth a retry.
+//// Reads the error object out of an OpenSearch answer, and decides which
+//// errors are worth a retry.
 
+import dream_opensearch/client.{
+  type OpenSearchError, InvalidResponseBody, InvalidUrl, NoRecording, Rejected,
+  TimedOut, Unavailable,
+}
 import gleam/dynamic/decode
 import gleam/json
+import gleam/result
 
-pub type OpenSearchError {
-  /// The client could not connect: refused, unknown host, TLS failure.
-  Unreachable(reason: String)
-  /// The connection broke or went quiet after the request went out.
-  Interrupted(message: String)
-  /// The base URL cannot be used. No request went out.
-  BadConfiguration(message: String)
-  /// OpenSearch answered with an error object.
-  Rejected(status: Int, error_type: String, reason: String)
-  /// Any other answer with an error status, as it came.
-  OtherAnswer(body: String)
+/// The `error` object of an OpenSearch answer.
+pub type ErrorDetails {
+  ErrorDetails(error_type: String, reason: String)
 }
 
-pub fn classify(message: String) -> OpenSearchError {
-  case message {
-    "Connection failed: " <> reason -> Unreachable(reason)
-    "Remote closed connection" | "Timed out after " <> _ -> Interrupted(message)
-    "Invalid OpenSearch URL: " <> _
-    | "Invalid credentials in the OpenSearch URL: " <> _ ->
-      BadConfiguration(message)
-    _ -> from_body(message)
+/// The type and the reason of a `Rejected` error, when its body is an
+/// OpenSearch error object. `Error(Nil)` for any other error or body.
+pub fn error_details(error: OpenSearchError) -> Result(ErrorDetails, Nil) {
+  case error {
+    Rejected(body:, ..) ->
+      json.parse(body, details_decoder())
+      |> result.replace_error(Nil)
+    _ -> Error(Nil)
   }
 }
 
-fn from_body(body: String) -> OpenSearchError {
-  case json.parse(body, rejected_decoder()) {
-    Ok(rejected) -> rejected
-    Error(_) -> OtherAnswer(body)
-  }
-}
-
-fn rejected_decoder() -> decode.Decoder(OpenSearchError) {
-  use status <- decode.field("status", decode.int)
+fn details_decoder() -> decode.Decoder(ErrorDetails) {
   use error_type <- decode.subfield(["error", "type"], decode.string)
   use reason <- decode.subfield(["error", "reason"], decode.string)
-  decode.success(Rejected(status:, error_type:, reason:))
+  decode.success(ErrorDetails(error_type:, reason:))
 }
 
 /// True for the errors that can go away if you send the same request
 /// again a little later.
 pub fn worth_a_retry(error: OpenSearchError) -> Bool {
   case error {
-    Unreachable(_) | Interrupted(_) -> True
+    Unavailable(_) | TimedOut(_) -> True
     Rejected(status: 429, ..)
     | Rejected(status: 502, ..)
     | Rejected(status: 503, ..)
     | Rejected(status: 504, ..) -> True
-    Rejected(..) | BadConfiguration(_) | OtherAnswer(_) -> False
+    Rejected(..) | InvalidUrl(_) | InvalidResponseBody(_) | NoRecording(..) ->
+      False
   }
 }

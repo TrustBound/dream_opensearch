@@ -31,7 +31,7 @@ import snippets/guide_getting_started_user_store.{type User, User}
 const alice = User(id: "123", name: "Alice", email: "alice@example.com")
 
 fn base_url(opensearch: Client) -> String {
-  opensearch.base_url
+  opensearch_cluster.base_url_of(opensearch)
 }
 
 /// `result` and `_version` of the body of an index or delete response.
@@ -51,12 +51,10 @@ fn field_type(
   index: String,
   field: String,
 ) -> Result(String, String) {
-  use body <- result.try(client.send_request(
-    opensearch,
-    http.Get,
-    "/" <> index <> "/_mapping",
-    "",
-  ))
+  use body <- result.try(
+    client.send_request(opensearch, http.Get, "/" <> index <> "/_mapping", "")
+    |> opensearch_cluster.as_text,
+  )
   json.parse(
     body,
     decode.at([index, "mappings", "properties", field, "type"], decode.string),
@@ -99,6 +97,7 @@ fn create_empty_index(
 ) -> Result(Nil, String) {
   document.create_index(opensearch, index, "{}")
   |> result.replace(Nil)
+  |> opensearch_cluster.as_text
 }
 
 pub fn tests() -> TestSuite {
@@ -109,27 +108,11 @@ pub fn tests() -> TestSuite {
         let opensearch = guide_getting_started_connect.local_client()
 
         // Assert
-        opensearch.base_url
-        |> should
-        |> be_equal("http://localhost:9200")
-        |> or_fail_with("local_client should use localhost:9200")
-      }),
-      it("secured_client percent-encodes the user name and password", fn() {
-        // Act
-        let opensearch =
-          guide_getting_started_connect.secured_client(
-            "https://search.example.com:9200",
-            "admin",
-            "p@ss:w/rd",
-          )
-
-        // Assert
         opensearch
         |> result.map(base_url)
-        |> result.map(guide_output.lines)
         |> should
-        |> be_equal(Ok(guide_output.file("guide_getting_started_secured_url")))
-        |> or_fail_with("The password should be percent-encoded")
+        |> be_equal(Ok("http://localhost:9200"))
+        |> or_fail_with("local_client should use localhost:9200")
       }),
       it("secured_client sends the user name and password in Base64", fn() {
         // Arrange
@@ -202,12 +185,13 @@ pub fn tests() -> TestSuite {
         // Assert
         saved
         |> should
-        |> be_equal(Error("Unauthorized"))
+        |> be_equal(Error(client.Rejected(status: 401, body: "Unauthorized")))
         |> or_fail_with("A 401 should come back as its plain text body")
       }),
       it("no credentials get Unauthorized from a secured cluster", fn() {
         // Arrange
-        let opensearch = client.new(opensearch_cluster.secured_base_url())
+        let opensearch =
+          opensearch_cluster.client_for(opensearch_cluster.secured_base_url())
 
         // Act
         let found =
@@ -220,7 +204,9 @@ pub fn tests() -> TestSuite {
         // Assert
         found
         |> should
-        |> be_equal(Error("Unauthorized"))
+        |> be_equal(Error(
+          "OpenSearch rejected the request with status 401: Unauthorized",
+        ))
         |> or_fail_with("A request with no credentials gets a 401")
       }),
     ]),
@@ -232,7 +218,8 @@ pub fn tests() -> TestSuite {
             201,
             guide_responses.user_indexed,
           ))
-        let opensearch = client.new(opensearch_test_server.base_url(server))
+        let opensearch =
+          opensearch_cluster.client_for(opensearch_test_server.base_url(server))
 
         // Act
         let _saved =
@@ -249,12 +236,15 @@ pub fn tests() -> TestSuite {
         // Act
         let answer = {
           use opensearch, index <- opensearch_cluster.with_index("users")
-          use body <- result.try(document.index(
-            opensearch,
-            index,
-            "123",
-            "{\"name\":\"Alice\",\"email\":\"alice@example.com\"}",
-          ))
+          use body <- result.try(
+            document.index(
+              opensearch,
+              index,
+              "123",
+              "{\"name\":\"Alice\",\"email\":\"alice@example.com\"}",
+            )
+            |> opensearch_cluster.as_text,
+          )
           guide_output.stable_body(body, index, "users", varying_fields)
         }
 
@@ -271,11 +261,10 @@ pub fn tests() -> TestSuite {
         // Act
         let stored = {
           use opensearch, index <- opensearch_cluster.with_index("users")
-          use Nil <- result.try(guide_getting_started_user_store.save_user(
-            opensearch,
-            index,
-            alice,
-          ))
+          use Nil <- result.try(
+            guide_getting_started_user_store.save_user(opensearch, index, alice)
+            |> opensearch_cluster.as_text,
+          )
           field_type(opensearch, index, "name")
         }
 
@@ -290,13 +279,14 @@ pub fn tests() -> TestSuite {
         let outcomes = {
           use opensearch, index <- opensearch_cluster.with_index("users")
           let body = "{\"name\":\"Alice\",\"email\":\"alice@example.com\"}"
-          use first <- result.try(document.index(opensearch, index, "123", body))
-          use second <- result.try(document.index(
-            opensearch,
-            index,
-            "123",
-            body,
-          ))
+          use first <- result.try(
+            document.index(opensearch, index, "123", body)
+            |> opensearch_cluster.as_text,
+          )
+          use second <- result.try(
+            document.index(opensearch, index, "123", body)
+            |> opensearch_cluster.as_text,
+          )
           [first, second]
           |> list.map(result_and_version)
           |> result.all
@@ -314,11 +304,10 @@ pub fn tests() -> TestSuite {
         // Act
         let found = {
           use opensearch, index <- opensearch_cluster.with_index("users")
-          use Nil <- result.try(guide_getting_started_user_store.save_user(
-            opensearch,
-            index,
-            alice,
-          ))
+          use Nil <- result.try(
+            guide_getting_started_user_store.save_user(opensearch, index, alice)
+            |> opensearch_cluster.as_text,
+          )
           guide_getting_started_user_store.find_users_by_name(
             opensearch,
             index,
@@ -336,15 +325,14 @@ pub fn tests() -> TestSuite {
         // Act
         let found = {
           use opensearch, index <- opensearch_cluster.with_index("users")
-          use Nil <- result.try(guide_getting_started_user_store.save_user(
-            opensearch,
-            index,
-            alice,
-          ))
-          use Nil <- result.try(guide_getting_started_user_store.refresh(
-            opensearch,
-            index,
-          ))
+          use Nil <- result.try(
+            guide_getting_started_user_store.save_user(opensearch, index, alice)
+            |> opensearch_cluster.as_text,
+          )
+          use Nil <- result.try(
+            guide_getting_started_user_store.refresh(opensearch, index)
+            |> opensearch_cluster.as_text,
+          )
           guide_getting_started_user_store.find_users_by_name(
             opensearch,
             index,
@@ -363,7 +351,8 @@ pub fn tests() -> TestSuite {
         // Arrange
         let server =
           opensearch_test_server.start(Respond(200, guide_responses.alice_found))
-        let opensearch = client.new(opensearch_test_server.base_url(server))
+        let opensearch =
+          opensearch_cluster.client_for(opensearch_test_server.base_url(server))
 
         // Act
         let _found =
@@ -386,20 +375,22 @@ pub fn tests() -> TestSuite {
         // Act
         let answer = {
           use opensearch, index <- opensearch_cluster.with_index("users")
-          use Nil <- result.try(guide_getting_started_user_store.save_user(
-            opensearch,
-            index,
-            alice,
-          ))
-          use Nil <- result.try(guide_getting_started_user_store.refresh(
-            opensearch,
-            index,
-          ))
-          use body <- result.try(document.search(
-            opensearch,
-            index,
-            "{\"query\":{\"match\":{\"name\":\"alice\"}}}",
-          ))
+          use Nil <- result.try(
+            guide_getting_started_user_store.save_user(opensearch, index, alice)
+            |> opensearch_cluster.as_text,
+          )
+          use Nil <- result.try(
+            guide_getting_started_user_store.refresh(opensearch, index)
+            |> opensearch_cluster.as_text,
+          )
+          use body <- result.try(
+            document.search(
+              opensearch,
+              index,
+              "{\"query\":{\"match\":{\"name\":\"alice\"}}}",
+            )
+            |> opensearch_cluster.as_text,
+          )
           guide_output.stable_body(body, index, "users", varying_fields)
         }
 
@@ -421,7 +412,7 @@ pub fn tests() -> TestSuite {
             index,
             "alice",
           )
-          |> result.map_error(opensearch_cluster.error_type_and_status)
+          |> result.map_error(opensearch_cluster.described_type_and_status)
           |> Ok
         }
 
@@ -447,20 +438,22 @@ pub fn tests() -> TestSuite {
         // Act
         let left = {
           use opensearch, index <- opensearch_cluster.with_index("users")
-          use Nil <- result.try(guide_getting_started_user_store.save_user(
-            opensearch,
-            index,
-            alice,
-          ))
-          use Nil <- result.try(guide_getting_started_user_store.delete_user(
-            opensearch,
-            index,
-            "123",
-          ))
-          use Nil <- result.try(guide_getting_started_user_store.refresh(
-            opensearch,
-            index,
-          ))
+          use Nil <- result.try(
+            guide_getting_started_user_store.save_user(opensearch, index, alice)
+            |> opensearch_cluster.as_text,
+          )
+          use Nil <- result.try(
+            guide_getting_started_user_store.delete_user(
+              opensearch,
+              index,
+              "123",
+            )
+            |> opensearch_cluster.as_text,
+          )
+          use Nil <- result.try(
+            guide_getting_started_user_store.refresh(opensearch, index)
+            |> opensearch_cluster.as_text,
+          )
           guide_getting_started_user_store.find_users_by_name(
             opensearch,
             index,
@@ -480,6 +473,7 @@ pub fn tests() -> TestSuite {
           use opensearch, index <- opensearch_cluster.with_index("users")
           use Nil <- result.try(create_empty_index(opensearch, index))
           document.delete(opensearch, index, "123")
+          |> opensearch_cluster.rejected_body
           |> result.map_error(result_and_version)
           |> Ok
         }
@@ -496,21 +490,31 @@ pub fn tests() -> TestSuite {
           // Act
           let answer = {
             use opensearch, index <- opensearch_cluster.with_index("users")
-            use Nil <- result.try(guide_getting_started_user_store.save_user(
-              opensearch,
-              index,
-              alice,
-            ))
-            use Nil <- result.try(guide_getting_started_user_store.save_user(
-              opensearch,
-              index,
-              alice,
-            ))
-            use _deleted <- result.try(document.delete(opensearch, index, "123"))
+            use Nil <- result.try(
+              guide_getting_started_user_store.save_user(
+                opensearch,
+                index,
+                alice,
+              )
+              |> opensearch_cluster.as_text,
+            )
+            use Nil <- result.try(
+              guide_getting_started_user_store.save_user(
+                opensearch,
+                index,
+                alice,
+              )
+              |> opensearch_cluster.as_text,
+            )
+            use _deleted <- result.try(
+              document.delete(opensearch, index, "123")
+              |> opensearch_cluster.as_text,
+            )
             case document.delete(opensearch, index, "123") {
               Ok(body) -> Error("Expected a 404, got: " <> body)
-              Error(body) ->
+              Error(client.Rejected(body:, ..)) ->
                 guide_output.stable_body(body, index, "users", varying_fields)
+              Error(error) -> Error(client.describe_error(error))
             }
           }
 
@@ -595,7 +599,8 @@ pub fn tests() -> TestSuite {
             Respond(200, guide_responses.refreshed),
             Respond(200, guide_responses.alice_found),
           ])
-        let opensearch = client.new(opensearch_test_server.base_url(server))
+        let opensearch =
+          opensearch_cluster.client_for(opensearch_test_server.base_url(server))
 
         // Act
         let found =

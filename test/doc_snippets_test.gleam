@@ -62,7 +62,8 @@ fn load(
   use _ <- result.try(
     list.try_map(documents, fn(entry) {
       document.index(opensearch, index, entry.0, entry.1)
-    }),
+    })
+    |> opensearch_cluster.as_text,
   )
   opensearch_cluster.refresh(opensearch, index)
 }
@@ -72,11 +73,13 @@ fn load(
 fn found_ids(
   prefix: String,
   documents: List(#(String, String)),
-  search: fn(Client, String) -> Result(String, String),
+  search: fn(Client, String) -> Result(String, client.OpenSearchError),
 ) -> Result(List(String), String) {
   use opensearch, index <- opensearch_cluster.with_index(prefix)
   use Nil <- result.try(load(opensearch, index, documents))
-  use body <- result.try(search(opensearch, index))
+  use body <- result.try(
+    search(opensearch, index) |> opensearch_cluster.as_text,
+  )
   json.parse(
     body,
     decode.at(["hits", "hits"], decode.list(decode.at(["_id"], decode.string))),
@@ -92,12 +95,10 @@ fn stored_field(
   index: String,
   field: String,
 ) -> Result(String, String) {
-  use body <- result.try(client.send_request(
-    opensearch,
-    http.Get,
-    "/" <> index <> "/_doc/123",
-    "",
-  ))
+  use body <- result.try(
+    client.send_request(opensearch, http.Get, "/" <> index <> "/_doc/123", "")
+    |> opensearch_cluster.as_text,
+  )
   json.parse(body, decode.at(["_source", field], decode.string))
   |> result.replace_error("Unexpected document: " <> body)
 }
@@ -116,19 +117,20 @@ pub fn tests() -> TestSuite {
         let opensearch = doc_client_quick_start.create_client()
 
         // Assert
-        opensearch.base_url
+        opensearch
+        |> result.map(opensearch_cluster.base_url_of)
         |> should
-        |> be_equal("http://localhost:9200")
+        |> be_equal(Ok("http://localhost:9200"))
         |> or_fail_with("create client uses localhost 9200")
       }),
       it("index alice creates the document 123 with her name", fn() {
         // Act
         let stored = {
           use opensearch, index <- opensearch_cluster.with_index("users")
-          use body <- result.try(doc_client_quick_start.index_alice(
-            opensearch,
-            index,
-          ))
+          use body <- result.try(
+            doc_client_quick_start.index_alice(opensearch, index)
+            |> opensearch_cluster.as_text,
+          )
           use outcome <- result.try(result_field(body))
           use name <- result.try(stored_field(opensearch, index, "name"))
           Ok(#(outcome, name))
@@ -147,9 +149,10 @@ pub fn tests() -> TestSuite {
         let opensearch = doc_client_new.create_local_client()
 
         // Assert
-        opensearch.base_url
+        opensearch
+        |> result.map(opensearch_cluster.base_url_of)
         |> should
-        |> be_equal("http://localhost:9200")
+        |> be_equal(Ok("http://localhost:9200"))
         |> or_fail_with("create local client uses localhost 9200")
       }),
       it("create client with credentials keeps the url", fn() {
@@ -157,9 +160,10 @@ pub fn tests() -> TestSuite {
         let opensearch = doc_client_new.create_client_with_credentials()
 
         // Assert
-        opensearch.base_url
+        opensearch
+        |> result.map(opensearch_cluster.base_url_of)
         |> should
-        |> be_equal("https://user:pass@search.example.com:9200")
+        |> be_equal(Ok("https://search.example.com:9200"))
         |> or_fail_with("create client with credentials keeps the url")
       }),
     ]),
@@ -168,16 +172,14 @@ pub fn tests() -> TestSuite {
         // Act
         let fetched = {
           use opensearch, index <- opensearch_cluster.with_index("users")
-          use _ <- result.try(document.index(
-            opensearch,
-            index,
-            "123",
-            "{\"name\":\"Alice\"}",
-          ))
-          use body <- result.try(doc_client_send_request.get_user(
-            opensearch,
-            index,
-          ))
+          use _ <- result.try(
+            document.index(opensearch, index, "123", "{\"name\":\"Alice\"}")
+            |> opensearch_cluster.as_text,
+          )
+          use body <- result.try(
+            doc_client_send_request.get_user(opensearch, index)
+            |> opensearch_cluster.as_text,
+          )
           let decoder = {
             use found <- decode.field("found", decode.bool)
             use name <- decode.subfield(["_source", "name"], decode.string)
@@ -197,8 +199,12 @@ pub fn tests() -> TestSuite {
         // Act
         let fetched = {
           use opensearch, index <- opensearch_cluster.with_index("users")
-          use _ <- result.try(document.create_index(opensearch, index, "{}"))
+          use _ <- result.try(
+            document.create_index(opensearch, index, "{}")
+            |> opensearch_cluster.as_text,
+          )
           doc_client_send_request.get_user(opensearch, index)
+          |> opensearch_cluster.rejected_body
           |> result.map_error(json.parse(_, decode.at(["found"], decode.bool)))
           |> Ok
         }
@@ -216,19 +222,20 @@ pub fn tests() -> TestSuite {
         let opensearch = doc_document_quick_start.create_client()
 
         // Assert
-        opensearch.base_url
+        opensearch
+        |> result.map(opensearch_cluster.base_url_of)
         |> should
-        |> be_equal("http://localhost:9200")
+        |> be_equal(Ok("http://localhost:9200"))
         |> or_fail_with("create client uses localhost 9200")
       }),
       it("index alice stores her email", fn() {
         // Act
         let stored = {
           use opensearch, index <- opensearch_cluster.with_index("users")
-          use _ <- result.try(doc_document_quick_start.index_alice(
-            opensearch,
-            index,
-          ))
+          use _ <- result.try(
+            doc_document_quick_start.index_alice(opensearch, index)
+            |> opensearch_cluster.as_text,
+          )
           stored_field(opensearch, index, "email")
         }
 
@@ -262,7 +269,7 @@ pub fn tests() -> TestSuite {
         reported
         |> should
         |> be_equal(
-          "Error: {\"error\":{\"root_cause\":[{\"type\":\"invalid_index_name_exception\",\"reason\":\"Invalid index name [Users], must be lowercase\",\"index\":\"Users\",\"index_uuid\":\"_na_\"}],\"type\":\"invalid_index_name_exception\",\"reason\":\"Invalid index name [Users], must be lowercase\",\"index\":\"Users\",\"index_uuid\":\"_na_\"},\"status\":400}",
+          "Error: OpenSearch rejected the request with status 400: {\"error\":{\"root_cause\":[{\"type\":\"invalid_index_name_exception\",\"reason\":\"Invalid index name [Users], must be lowercase\",\"index\":\"Users\",\"index_uuid\":\"_na_\"}],\"type\":\"invalid_index_name_exception\",\"reason\":\"Invalid index name [Users], must be lowercase\",\"index\":\"Users\",\"index_uuid\":\"_na_\"},\"status\":400}",
         )
         |> or_fail_with("An upper-case index name gets a 400")
       }),
@@ -300,12 +307,10 @@ pub fn tests() -> TestSuite {
         // Act
         let reported = {
           use opensearch, index <- opensearch_cluster.with_index("users")
-          use _ <- result.try(document.index(
-            opensearch,
-            index,
-            "123",
-            "{\"name\":\"Alice\"}",
-          ))
+          use _ <- result.try(
+            document.index(opensearch, index, "123", "{\"name\":\"Alice\"}")
+            |> opensearch_cluster.as_text,
+          )
           Ok(doc_document_delete.delete_user(opensearch, index))
         }
 
@@ -319,7 +324,10 @@ pub fn tests() -> TestSuite {
         // Act
         let reported = {
           use opensearch, index <- opensearch_cluster.with_index("users")
-          use _ <- result.try(document.create_index(opensearch, index, "{}"))
+          use _ <- result.try(
+            document.create_index(opensearch, index, "{}")
+            |> opensearch_cluster.as_text,
+          )
           // The index name varies, so put the name of the example in its place
           doc_document_delete.delete_user(opensearch, index)
           |> string.replace(index, "users")
@@ -330,7 +338,7 @@ pub fn tests() -> TestSuite {
         reported
         |> should
         |> be_equal(Ok(
-          "Error: {\"_index\":\"users\",\"_id\":\"123\",\"_version\":1,\"result\":\"not_found\",\"_shards\":{\"total\":2,\"successful\":1,\"failed\":0},\"_seq_no\":0,\"_primary_term\":1}",
+          "Error: OpenSearch rejected the request with status 404: {\"_index\":\"users\",\"_id\":\"123\",\"_version\":1,\"result\":\"not_found\",\"_shards\":{\"total\":2,\"successful\":1,\"failed\":0},\"_seq_no\":0,\"_primary_term\":1}",
         ))
         |> or_fail_with("A missing document gets a 404 with not_found")
       }),
@@ -343,6 +351,7 @@ pub fn tests() -> TestSuite {
           // The index name varies, so put the name of the example in its place
           doc_document_create_index.create_users_index(opensearch, index)
           |> result.map(string.replace(_, index, "users"))
+          |> opensearch_cluster.as_text
         }
 
         // Assert
@@ -357,16 +366,19 @@ pub fn tests() -> TestSuite {
         // Act
         let mapped = {
           use opensearch, index <- opensearch_cluster.with_index("users")
-          use _ <- result.try(doc_document_create_index.create_users_index(
-            opensearch,
-            index,
-          ))
-          use body <- result.try(client.send_request(
-            opensearch,
-            http.Get,
-            "/" <> index <> "/_mapping",
-            "",
-          ))
+          use _ <- result.try(
+            doc_document_create_index.create_users_index(opensearch, index)
+            |> opensearch_cluster.as_text,
+          )
+          use body <- result.try(
+            client.send_request(
+              opensearch,
+              http.Get,
+              "/" <> index <> "/_mapping",
+              "",
+            )
+            |> opensearch_cluster.as_text,
+          )
           json.parse(
             body,
             decode.at(
@@ -387,10 +399,10 @@ pub fn tests() -> TestSuite {
         // Act
         let created = {
           use opensearch, index <- opensearch_cluster.with_index("users")
-          use _ <- result.try(doc_document_create_index.create_users_index(
-            opensearch,
-            index,
-          ))
+          use _ <- result.try(
+            doc_document_create_index.create_users_index(opensearch, index)
+            |> opensearch_cluster.as_text,
+          )
           doc_document_create_index.create_users_index(opensearch, index)
           |> result.map_error(opensearch_cluster.error_type_and_status)
           |> Ok
@@ -408,7 +420,10 @@ pub fn tests() -> TestSuite {
         // Act
         let reported = {
           use opensearch, index <- opensearch_cluster.with_index("old_index")
-          use _ <- result.try(document.create_index(opensearch, index, "{}"))
+          use _ <- result.try(
+            document.create_index(opensearch, index, "{}")
+            |> opensearch_cluster.as_text,
+          )
           Ok(doc_document_delete_index.delete_old_index(opensearch, index))
         }
 
@@ -432,7 +447,7 @@ pub fn tests() -> TestSuite {
         reported
         |> should
         |> be_equal(Ok(
-          "Error: {\"error\":{\"root_cause\":[{\"type\":\"index_not_found_exception\",\"reason\":\"no such index [old_index]\",\"index\":\"old_index\",\"resource.id\":\"old_index\",\"resource.type\":\"index_or_alias\",\"index_uuid\":\"_na_\"}],\"type\":\"index_not_found_exception\",\"reason\":\"no such index [old_index]\",\"index\":\"old_index\",\"resource.id\":\"old_index\",\"resource.type\":\"index_or_alias\",\"index_uuid\":\"_na_\"},\"status\":404}",
+          "Error: OpenSearch rejected the request with status 404: {\"error\":{\"root_cause\":[{\"type\":\"index_not_found_exception\",\"reason\":\"no such index [old_index]\",\"index\":\"old_index\",\"resource.id\":\"old_index\",\"resource.type\":\"index_or_alias\",\"index_uuid\":\"_na_\"}],\"type\":\"index_not_found_exception\",\"reason\":\"no such index [old_index]\",\"index\":\"old_index\",\"resource.id\":\"old_index\",\"resource.type\":\"index_or_alias\",\"index_uuid\":\"_na_\"},\"status\":404}",
         ))
         |> or_fail_with("A missing index gets a 404")
       }),
@@ -442,21 +457,24 @@ pub fn tests() -> TestSuite {
         // Act
         let loaded = {
           use opensearch, index <- opensearch_cluster.with_index("users")
-          use body <- result.try(doc_document_bulk.bulk_index_users(
-            opensearch,
-            index,
-          ))
+          use body <- result.try(
+            doc_document_bulk.bulk_index_users(opensearch, index)
+            |> opensearch_cluster.as_text,
+          )
           use errors <- result.try(
             json.parse(body, decode.at(["errors"], decode.bool))
             |> result.replace_error("Unexpected bulk response: " <> body),
           )
           use Nil <- result.try(opensearch_cluster.refresh(opensearch, index))
-          use counted <- result.try(client.send_request(
-            opensearch,
-            http.Get,
-            "/" <> index <> "/_count",
-            "",
-          ))
+          use counted <- result.try(
+            client.send_request(
+              opensearch,
+              http.Get,
+              "/" <> index <> "/_count",
+              "",
+            )
+            |> opensearch_cluster.as_text,
+          )
           json.parse(counted, decode.at(["count"], decode.int))
           |> result.map(fn(count) { #(errors, count) })
           |> result.replace_error("Unexpected count response: " <> counted)

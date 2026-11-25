@@ -21,29 +21,31 @@ pub fn tests() -> TestSuite {
       let opensearch = architecture_opensearch.create_client()
 
       // Act
-      let base_url = opensearch.base_url
+      let base_url = result.map(opensearch, opensearch_cluster.base_url_of)
 
       // Assert
       base_url
       |> should
-      |> be_equal("http://localhost:9200")
+      |> be_equal(Ok("http://localhost:9200"))
       |> or_fail_with("create client uses localhost 9200")
     }),
     it("index log entry stores the message under doc-id-123", fn() {
       // Act
       let stored = {
         use opensearch, index <- opensearch_cluster.with_index("logs")
-        use _ <- result.try(architecture_opensearch.index_log_entry(
-          opensearch,
-          index,
-          "Started",
-        ))
-        use body <- result.try(client.send_request(
-          opensearch,
-          http.Get,
-          "/" <> index <> "/_doc/doc-id-123",
-          "",
-        ))
+        use _ <- result.try(
+          architecture_opensearch.index_log_entry(opensearch, index, "Started")
+          |> opensearch_cluster.as_text,
+        )
+        use body <- result.try(
+          client.send_request(
+            opensearch,
+            http.Get,
+            "/" <> index <> "/_doc/doc-id-123",
+            "",
+          )
+          |> opensearch_cluster.as_text,
+        )
         json.parse(body, decode.at(["_source", "message"], decode.string))
         |> result.replace_error("Unexpected document: " <> body)
       }
@@ -61,6 +63,7 @@ pub fn tests() -> TestSuite {
         // The index name varies, so put the name of the example in its place
         architecture_opensearch.index_log_entry(opensearch, index, "Started")
         |> result.map(string.replace(_, index, "logs"))
+        |> opensearch_cluster.as_text
       }
 
       // Assert

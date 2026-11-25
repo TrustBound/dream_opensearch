@@ -29,6 +29,8 @@ A standalone HTTP client for OpenSearch (or Elasticsearch) clusters. It indexes,
 - ✅ Index management
 - ✅ Bulk operations
 - ✅ Query builder helpers
+- ✅ Typed errors: match on `Rejected`, `Unavailable`, `TimedOut` and more
+- ✅ A client from a `dream_http_client` request, for a timeout, a recorder or a certificate authority
 - ✅ Zero dependencies on Dream or other frameworks
 
 ## Installation
@@ -39,21 +41,21 @@ gleam add dream_opensearch
 
 ## Quick Start
 
-### Index, search and delete a document <a href="https://github.com/TrustBound/dream_opensearch/blob/3.0.0/test/snippets/readme_quick_start.gleam#L5-L34"><img align="right" alt="Tested snippet" src="https://img.shields.io/badge/%F0%9F%A7%AA_tested-snippet-lightgreen.svg?style=flat-square"></a> <a href="https://github.com/TrustBound/dream_opensearch/blob/3.0.0/docs/guides/getting-started.md#index-search-and-delete-a-document-"><img align="right" alt="Guide: Getting started" title="Guide: Getting started" src="https://img.shields.io/badge/%F0%9F%93%96_read-guide-blue.svg?style=flat-square"></a>
+### Index, search and delete a document <a href="https://github.com/TrustBound/dream_opensearch/blob/4.0.0/test/snippets/readme_quick_start.gleam#L5-L34"><img align="right" alt="Tested snippet" src="https://img.shields.io/badge/%F0%9F%A7%AA_tested-snippet-lightgreen.svg?style=flat-square"></a> <a href="https://github.com/TrustBound/dream_opensearch/blob/4.0.0/docs/guides/getting-started.md#index-search-and-delete-a-document-"><img align="right" alt="Guide: Getting started" title="Guide: Getting started" src="https://img.shields.io/badge/%F0%9F%93%96_read-guide-blue.svg?style=flat-square"></a>
 
 ```gleam
-import dream_opensearch/client.{type Client}
+import dream_opensearch/client.{type Client, type OpenSearchError}
 import dream_opensearch/document
 import dream_opensearch/query
 import gleam/json
 
 // Create client
-pub fn create_client() -> Client {
+pub fn create_client() -> Result(Client, OpenSearchError) {
   client.new("http://localhost:9200")
 }
 
 // Index a document
-pub fn index_alice(opensearch: Client) -> Result(String, String) {
+pub fn index_alice(opensearch: Client) -> Result(String, OpenSearchError) {
   let user =
     json.object([
       #("name", json.string("Alice")),
@@ -63,13 +65,13 @@ pub fn index_alice(opensearch: Client) -> Result(String, String) {
 }
 
 // Search documents
-pub fn search_for_alice(opensearch: Client) -> Result(String, String) {
+pub fn search_for_alice(opensearch: Client) -> Result(String, OpenSearchError) {
   let search_query = query.match("name", "Alice")
   document.search(opensearch, "users", search_query)
 }
 
 // Delete document
-pub fn delete_alice(opensearch: Client) -> Result(String, String) {
+pub fn delete_alice(opensearch: Client) -> Result(String, OpenSearchError) {
   document.delete(opensearch, "users", "123")
 }
 ```
@@ -80,7 +82,8 @@ pub fn delete_alice(opensearch: Client) -> Result(String, String) {
 - [Searching an index](https://github.com/TrustBound/dream_opensearch/blob/main/docs/guides/searching.md): match, term, range and bool queries, pages and sorting, and reading the hits into your own types
 - [Loading documents in bulk](https://github.com/TrustBound/dream_opensearch/blob/main/docs/guides/bulk-loading.md): load many documents in one request, find the ones that failed, load in batches and retry
 - [Managing indexes](https://github.com/TrustBound/dream_opensearch/blob/main/docs/guides/managing-indexes.md): create an index with settings and a mapping, check, refresh, count, copy and delete indexes
-- [Handling errors](https://github.com/TrustBound/dream_opensearch/blob/main/docs/guides/handling-errors.md): every error the client returns, a typed error to match on, what to retry, and logs without the password
+- [Handling errors](https://github.com/TrustBound/dream_opensearch/blob/main/docs/guides/handling-errors.md): every error the client returns, the details of an OpenSearch error, what to retry, logs without the password, and the timeout
+- [Upgrading](https://github.com/TrustBound/dream_opensearch/blob/main/docs/guides/upgrading.md): the code changes from 3.x to 4.0.0, before and after
 
 ## API Reference
 

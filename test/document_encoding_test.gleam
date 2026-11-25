@@ -12,11 +12,15 @@ import dream_test/matchers.{be_equal, or_fail_with, should}
 import dream_test/suite.{type TestSuite}
 import dream_test/unit.{describe, group, it}
 import gleam/result
+import opensearch_cluster
 import opensearch_test_server.{type TestServer, Respond}
 
 fn serve() -> #(TestServer, Client) {
   let server = opensearch_test_server.start(Respond(200, "{}"))
-  #(server, client.new(opensearch_test_server.base_url(server)))
+  #(
+    server,
+    opensearch_cluster.client_for(opensearch_test_server.base_url(server)),
+  )
 }
 
 fn request_line(server: TestServer) -> Result(#(String, String), Nil) {

@@ -13,6 +13,6 @@ pub fn index_alice(opensearch: Client, index: String) -> String {
 
   case document.index(opensearch, index, "123", json.to_string(user)) {
     Ok(_response) -> "Indexed successfully"
-    Error(message) -> "Error: " <> message
+    Error(error) -> "Error: " <> client.describe_error(error)
   }
 }

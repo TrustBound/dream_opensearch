@@ -71,11 +71,13 @@ fn with_books(
   search: fn(Client, String) -> Result(value, String),
 ) -> Result(Result(value, String), String) {
   use opensearch, index <- opensearch_cluster.with_index("books")
-  use Nil <- result.try(guide_managing_indexes_create.create_books_index(
-    opensearch,
-    index,
-  ))
-  use _ <- result.try(document.bulk(opensearch, books_ndjson(index)))
+  use Nil <- result.try(
+    guide_managing_indexes_create.create_books_index(opensearch, index)
+    |> opensearch_cluster.as_text,
+  )
+  use _ <- result.try(
+    document.bulk(opensearch, books_ndjson(index)) |> opensearch_cluster.as_text,
+  )
   use Nil <- result.try(opensearch_cluster.refresh(opensearch, index))
   Ok(search(opensearch, index))
 }
@@ -92,7 +94,10 @@ fn sent_request(
   search: fn(Client) -> Result(SearchResult, String),
 ) -> Result(String, Nil) {
   let server = opensearch_test_server.start(Respond(200, no_hits))
-  let _found = search(client.new(opensearch_test_server.base_url(server)))
+  let _found =
+    search(
+      opensearch_cluster.client_for(opensearch_test_server.base_url(server)),
+    )
   use request <- result.map(opensearch_test_server.await_request(server))
   guide_output.request(request.method, request.target, request.body)
 }
@@ -158,11 +163,10 @@ pub fn tests() -> TestSuite {
         // Act
         let answer =
           with_books(fn(opensearch, index) {
-            use body <- result.try(document.search(
-              opensearch,
-              index,
-              query.match("title", "gleam"),
-            ))
+            use body <- result.try(
+              document.search(opensearch, index, query.match("title", "gleam"))
+              |> opensearch_cluster.as_text,
+            )
             guide_output.stable_body(body, index, "books", varying_fields)
           })
           |> result.flatten
@@ -369,8 +373,13 @@ pub fn tests() -> TestSuite {
           use opensearch, index <- opensearch_cluster.with_index("books")
           case guide_searching_books.books_about(opensearch, index, "gleam") {
             Ok(_) -> Error("Expected a 404 for a missing index")
-            Error(body) ->
-              guide_output.stable_body(body, index, "books", varying_fields)
+            Error(text) ->
+              guide_output.stable_body(
+                opensearch_cluster.described_body(text),
+                index,
+                "books",
+                varying_fields,
+              )
           }
         }
 
@@ -396,7 +405,11 @@ pub fn tests() -> TestSuite {
           |> result.map(fn(searched) {
             case searched {
               Ok(_) -> Error("Expected a 400 for a misspelled query")
-              Error(body) -> guide_output.stable_json(body, varying_fields)
+              Error(text) ->
+                guide_output.stable_json(
+                  opensearch_cluster.described_body(text),
+                  varying_fields,
+                )
             }
           })
           |> result.flatten
@@ -416,7 +429,10 @@ pub fn tests() -> TestSuite {
           use opensearch, index <- opensearch_cluster.with_index("books")
           let notes =
             "{\"title\":\"Notes\",\"author\":\"Kim\",\"in_stock\":true}"
-          use _ <- result.try(document.index(opensearch, index, "9", notes))
+          use _ <- result.try(
+            document.index(opensearch, index, "9", notes)
+            |> opensearch_cluster.as_text,
+          )
           use Nil <- result.try(opensearch_cluster.refresh(opensearch, index))
           guide_searching_books.books_about(opensearch, index, "notes")
           |> result.map_error(string.starts_with(
