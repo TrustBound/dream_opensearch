@@ -1,19 +1,35 @@
 name = "dream_opensearch"
-version = "2.0.0"
+version = "3.0.0"
 description = "Simple OpenSearch client for Gleam"
 licences = ["MIT"]
-repository = { type = "github", user = "TrustBound", repo = "dream" }
+repository = { type = "github", user = "TrustBound", repo = "dream_opensearch" }
 links = [
     { title = "Documentation", href = "https://hexdocs.pm/dream_opensearch" },
-    { title = "GitHub", href = "https://github.com/TrustBound/dream" },
+    { title = "GitHub", href = "https://github.com/TrustBound/dream_opensearch" },
+]
+
+[documentation]
+pages = [
+    { title = "Getting started", path = "guides/getting-started.html", source = "./docs/guides/getting-started.md" },
+    { title = "Searching an index", path = "guides/searching.html", source = "./docs/guides/searching.md" },
+    { title = "Loading documents in bulk", path = "guides/bulk-loading.html", source = "./docs/guides/bulk-loading.md" },
+    { title = "Managing indexes", path = "guides/managing-indexes.html", source = "./docs/guides/managing-indexes.md" },
+    { title = "Handling errors", path = "guides/handling-errors.html", source = "./docs/guides/handling-errors.md" },
 ]
 
 [dependencies]
 gleam_stdlib = ">= 1.0.0 and < 2.0.0"
 gleam_json = ">= 2.0.0 and < 4.0.0"
 gleam_http = ">= 4.3.0 and < 5.0.0"
-dream_http_client = { path = "../http_client" }
+dream_http_client = ">= 6.0.0 and < 7.0.0"
 
 [dev-dependencies]
-gleeunit = ">= 1.0.0 and < 2.0.0"
+dream_test = ">= 3.0.0 and < 4.0.0"
+dream_snippets = ">= 1.0.0 and < 2.0.0"
 
+[tools.dream_snippets]
+# Changelog sections and release notes before this version are history. They are not checked.
+checked_from_version = "3.0.0"
+# The files that the tests and CI use: the test code and its output files,
+# the scripts of the Makefile and CI, the OpenSearch of the tests, and this file.
+tested_files = ["test", "scripts", "docker-compose.yml", "gleam.toml"]

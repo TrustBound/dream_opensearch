@@ -1,16 +1,26 @@
 <div align="center">
-  <img src="https://raw.githubusercontent.com/TrustBound/dream/main/ricky_and_lucy.png" alt="Dream Logo" width="200">
-  
-  <a href="https://hexdocs.pm/dream_opensearch">
-    <img src="https://img.shields.io/badge/hex-docs-lightgreen.svg" alt="HexDocs">
-  </a>
+  <img src="https://raw.githubusercontent.com/TrustBound/dream/main/ricky_and_lucy.png" alt="Ricky Moony and Lucy, a moon shaped mascot for Dream with the star shaped mascot for Gleam, each with cute cartoon eyes and a smile" width="200">
+
+<b>Simple OpenSearch client for Gleam</b>
+
 </div>
+
+<br />
+
+<div align="center">
+  <a href="https://hex.pm/packages/dream_opensearch"><img src="https://img.shields.io/hexpm/v/dream_opensearch" alt="Hex Package"></a>
+  <a href="https://github.com/TrustBound/dream_opensearch/releases"><img src="https://img.shields.io/github/v/release/TrustBound/dream_opensearch?label=Release" alt="Latest Release"></a>
+  <a href="https://hexdocs.pm/dream_opensearch"><img src="https://img.shields.io/badge/hex-docs-lightgreen.svg" alt="HexDocs"></a>
+  <a href="https://github.com/TrustBound/dream_opensearch/actions/workflows/ci.yml?query=branch%3Amain"><img src="https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/TrustBound/dream_opensearch/badges/coverage.json" alt="Coverage"></a>
+  <a href="https://github.com/TrustBound/dream_opensearch/blob/main/LICENSE.md"><img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="MIT License"></a>
+  <a href="https://gleam.run"><img src="https://img.shields.io/badge/gleam-%E2%9C%A8-ffaff3" alt="Gleam"></a>
+</div>
+
+<br />
 
 # dream_opensearch
 
-**Simple OpenSearch client for Gleam.**
-
-A standalone HTTP client for interacting with OpenSearch (or Elasticsearch) clusters. Provides clean interfaces for indexing, searching, and managing documents. Built with the same quality standards as [Dream](https://github.com/TrustBound/dream), but completely independent—use it in any Gleam project.
+A standalone HTTP client for OpenSearch (or Elasticsearch) clusters. It indexes, searches and deletes documents, and manages indices. It is built with the same quality standards as [Dream](https://github.com/TrustBound/dream), but it is completely independent. Use it in any Gleam project.
 
 ## Features
 
@@ -27,7 +37,9 @@ A standalone HTTP client for interacting with OpenSearch (or Elasticsearch) clus
 gleam add dream_opensearch
 ```
 
-## Quick Start <a href="https://github.com/TrustBound/dream/blob/dream_opensearch-2.0.0/modules/opensearch/test/snippets/readme_quick_start.gleam"><img align="right" alt="Tested snippet" src="https://img.shields.io/badge/%F0%9F%A7%AA_tested-snippet-lightgreen.svg?style=flat-square"></a>
+## Quick Start
+
+### Index, search and delete a document <a href="https://github.com/TrustBound/dream_opensearch/blob/3.0.0/test/snippets/readme_quick_start.gleam#L5-L34"><img align="right" alt="Tested snippet" src="https://img.shields.io/badge/%F0%9F%A7%AA_tested-snippet-lightgreen.svg?style=flat-square"></a> <a href="https://github.com/TrustBound/dream_opensearch/blob/3.0.0/docs/guides/getting-started.md#index-search-and-delete-a-document-"><img align="right" alt="Guide: Getting started" title="Guide: Getting started" src="https://img.shields.io/badge/%F0%9F%93%96_read-guide-blue.svg?style=flat-square"></a>
 
 ```gleam
 import dream_opensearch/client.{type Client}
@@ -62,215 +74,21 @@ pub fn delete_alice(opensearch: Client) -> Result(String, String) {
 }
 ```
 
-## Usage
+## Guides
 
-### Client Setup <a href="https://github.com/TrustBound/dream/blob/dream_opensearch-2.0.0/modules/opensearch/test/snippets/readme_client_setup.gleam"><img align="right" alt="Tested snippet" src="https://img.shields.io/badge/%F0%9F%A7%AA_tested-snippet-lightgreen.svg?style=flat-square"></a>
-
-```gleam
-import dream_opensearch/client.{type Client}
-
-// Basic setup
-pub fn create_local_client() -> Client {
-  client.new("http://localhost:9200")
-}
-
-// With authentication: every request sends the user name and password as
-// HTTP Basic authentication
-pub fn create_client_with_credentials() -> Client {
-  client.new("https://user:pass@search.example.com:9200")
-}
-```
-
-When the URL has a user name and password, the client sends them on every request in an `authorization: Basic ...` header. It does not send them in the request line or the `host` header. Percent-encode special characters in the user name or password (for example `@` as `%40`, `:` as `%3A`, `/` as `%2F`): the client decodes them before it encodes the header. A URL with a user name and no password sends an empty password.
-
-### Indexing Documents <a href="https://github.com/TrustBound/dream/blob/dream_opensearch-2.0.0/modules/opensearch/test/snippets/readme_indexing_documents.gleam"><img align="right" alt="Tested snippet" src="https://img.shields.io/badge/%F0%9F%A7%AA_tested-snippet-lightgreen.svg?style=flat-square"></a>
-
-```gleam
-import dream_opensearch/client.{type Client}
-import dream_opensearch/document
-import gleam/json
-
-pub fn index_user(opensearch: Client) -> String {
-  let user =
-    json.object([
-      #("name", json.string("Alice")),
-      #("email", json.string("alice@example.com")),
-      #("age", json.int(30)),
-    ])
-
-  case document.index(opensearch, "users", "123", json.to_string(user)) {
-    Ok(_response) -> "Indexed successfully"
-    Error(message) -> "Error: " <> message
-  }
-}
-```
-
-### Searching
-
-Use query builders for common queries:
-
-#### Search with each query builder <a href="https://github.com/TrustBound/dream/blob/dream_opensearch-2.0.0/modules/opensearch/test/snippets/readme_searching.gleam"><img align="right" alt="Tested snippet" src="https://img.shields.io/badge/%F0%9F%A7%AA_tested-snippet-lightgreen.svg?style=flat-square"></a>
-
-```gleam
-import dream_opensearch/client.{type Client}
-import dream_opensearch/document
-import dream_opensearch/query
-
-// Full-text search
-pub fn search_by_name(opensearch: Client) -> Result(String, String) {
-  let name_query = query.match("name", "Alice")
-  document.search(opensearch, "users", name_query)
-}
-
-// Exact term match
-pub fn search_by_status(opensearch: Client) -> Result(String, String) {
-  let status_query = query.term("status", "active")
-  document.search(opensearch, "users", status_query)
-}
-
-// Range query
-pub fn search_by_age(opensearch: Client) -> Result(String, String) {
-  let age_query = query.range("age", "18", "65")
-  document.search(opensearch, "users", age_query)
-}
-
-// Match all
-pub fn search_all(opensearch: Client) -> Result(String, String) {
-  let all_query = query.match_all()
-  document.search(opensearch, "users", all_query)
-}
-```
-
-### Custom Queries
-
-For complex queries, build JSON manually:
-
-#### Search with a bool query <a href="https://github.com/TrustBound/dream/blob/dream_opensearch-2.0.0/modules/opensearch/test/snippets/readme_custom_queries.gleam"><img align="right" alt="Tested snippet" src="https://img.shields.io/badge/%F0%9F%A7%AA_tested-snippet-lightgreen.svg?style=flat-square"></a>
-
-```gleam
-import dream_opensearch/client.{type Client}
-import dream_opensearch/document
-import gleam/json
-
-pub fn search_active_users_named_alice(
-  opensearch: Client,
-) -> Result(String, String) {
-  let bool_query =
-    json.object([
-      #(
-        "query",
-        json.object([
-          #(
-            "bool",
-            json.object([
-              #(
-                "must",
-                json.preprocessed_array([
-                  json.object([
-                    #("match", json.object([#("name", json.string("Alice"))])),
-                  ]),
-                ]),
-              ),
-              #(
-                "filter",
-                json.preprocessed_array([
-                  json.object([
-                    #("term", json.object([#("status", json.string("active"))])),
-                  ]),
-                ]),
-              ),
-            ]),
-          ),
-        ]),
-      ),
-    ])
-
-  document.search(opensearch, "users", json.to_string(bool_query))
-}
-```
-
-### Index Management <a href="https://github.com/TrustBound/dream/blob/dream_opensearch-2.0.0/modules/opensearch/test/snippets/readme_index_management.gleam"><img align="right" alt="Tested snippet" src="https://img.shields.io/badge/%F0%9F%A7%AA_tested-snippet-lightgreen.svg?style=flat-square"></a>
-
-```gleam
-import dream_opensearch/client.{type Client}
-import dream_opensearch/document
-import gleam/json
-
-// Create index with mapping
-pub fn create_users_index(opensearch: Client) -> Result(String, String) {
-  let mapping =
-    json.object([
-      #(
-        "mappings",
-        json.object([
-          #(
-            "properties",
-            json.object([
-              #("name", json.object([#("type", json.string("text"))])),
-              #("email", json.object([#("type", json.string("keyword"))])),
-            ]),
-          ),
-        ]),
-      ),
-    ])
-  document.create_index(opensearch, "users", json.to_string(mapping))
-}
-
-// Delete index
-pub fn delete_old_index(opensearch: Client) -> Result(String, String) {
-  document.delete_index(opensearch, "old_index")
-}
-```
-
-### Bulk Operations <a href="https://github.com/TrustBound/dream/blob/dream_opensearch-2.0.0/modules/opensearch/test/snippets/readme_bulk_operations.gleam"><img align="right" alt="Tested snippet" src="https://img.shields.io/badge/%F0%9F%A7%AA_tested-snippet-lightgreen.svg?style=flat-square"></a>
-
-```gleam
-import dream_opensearch/client.{type Client}
-import dream_opensearch/document
-
-pub fn bulk_index_users(opensearch: Client) -> Result(String, String) {
-  // NDJSON format: action and document on alternating lines
-  let ndjson =
-    "{ \"index\": { \"_index\": \"users\", \"_id\": \"1\" } }\n"
-    <> "{ \"name\": \"Alice\", \"email\": \"alice@example.com\" }\n"
-    <> "{ \"index\": { \"_index\": \"users\", \"_id\": \"2\" } }\n"
-    <> "{ \"name\": \"Bob\", \"email\": \"bob@example.com\" }\n"
-
-  document.bulk(opensearch, ndjson)
-}
-```
+- [Getting started](https://github.com/TrustBound/dream_opensearch/blob/main/docs/guides/getting-started.md): connect to a local or a secured cluster, then save, search for and delete documents from a Gleam module, with tests
+- [Searching an index](https://github.com/TrustBound/dream_opensearch/blob/main/docs/guides/searching.md): match, term, range and bool queries, pages and sorting, and reading the hits into your own types
+- [Loading documents in bulk](https://github.com/TrustBound/dream_opensearch/blob/main/docs/guides/bulk-loading.md): load many documents in one request, find the ones that failed, load in batches and retry
+- [Managing indexes](https://github.com/TrustBound/dream_opensearch/blob/main/docs/guides/managing-indexes.md): create an index with settings and a mapping, check, refresh, count, copy and delete indexes
+- [Handling errors](https://github.com/TrustBound/dream_opensearch/blob/main/docs/guides/handling-errors.md): every error the client returns, a typed error to match on, what to retry, and logs without the password
 
 ## API Reference
 
-### Client
-
-- `client.new(base_url)` - Create new OpenSearch client
-
-### Document Operations
-
-- `document.index(client, index, id, json)` - Index a document
-- `document.search(client, index, query_json)` - Search documents
-- `document.delete(client, index, id)` - Delete a document
-- `document.create_index(client, index, mapping_json)` - Create index
-- `document.delete_index(client, index)` - Delete index
-- `document.bulk(client, ndjson)` - Bulk index documents
-
-### Query Builders
-
-- `query.match_all()` - Match all documents
-- `query.match(field, text)` - Full-text search
-- `query.term(field, value)` - Exact term match
-- `query.range(field, gte, lte)` - Range query
+The full API reference is on [HexDocs](https://hexdocs.pm/dream_opensearch). The guides show each function where a task needs it.
 
 ## Design Principles
 
-This module follows the same quality standards as [Dream](https://github.com/TrustBound/dream):
-
-- **No nested cases** - Clear, flat control flow
-- **No anonymous functions** - Named functions for clarity
-- **Builder pattern** - Consistent, composable APIs
-- **Type safety** - `Result` types force error handling
-- **Quality testing** - Comprehensive test coverage
+dream_opensearch follows Dream's [design principles](https://github.com/TrustBound/dream/blob/release/3.0.0/docs/reference/design-principles.md) and [contributing guide](https://github.com/TrustBound/dream/blob/release/3.0.0/docs/contributing/contributing.md).
 
 ## About Dream
 
@@ -278,4 +96,10 @@ This module was originally built for the [Dream](https://github.com/TrustBound/d
 
 ## License
 
-MIT License - see LICENSE file for details.
+MIT — see [LICENSE.md](https://github.com/TrustBound/dream_opensearch/blob/main/LICENSE.md)
+
+---
+
+<div align="center">
+  <sub>Built in Gleam, on the BEAM, by the <a href="https://github.com/trustbound/dream">Dream Team</a> ❤️</sub>
+</div>

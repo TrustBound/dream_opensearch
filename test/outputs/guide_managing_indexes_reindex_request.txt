@@ -1,0 +1,2 @@
+POST /_reindex
+{"source":{"index":"books_v1"},"dest":{"index":"books_v2"}}

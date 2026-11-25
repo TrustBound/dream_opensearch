@@ -1,61 +1,75 @@
-//// Tests for the dream_opensearch snippet in docs/reference/architecture.md.
-////
-//// Requests go to the one-shot server in `opensearch_test_server`, not to a
-//// real OpenSearch.
+//// Tests for the dream_opensearch snippet of the architecture reference,
+//// against the real OpenSearch of `opensearch_cluster`. Each test uses its
+//// own index and deletes it.
 
 import dream_opensearch/client
-import gleeunit/should
-import opensearch_test_server.{Respond}
+import dream_test/matchers.{be_equal, or_fail_with, should}
+import dream_test/suite.{type TestSuite}
+import dream_test/unit.{describe, it}
+import gleam/dynamic/decode
+import gleam/http
+import gleam/json
+import gleam/result
+import gleam/string
+import opensearch_cluster
 import snippets/architecture_opensearch
 
-pub fn create_client_uses_localhost_9200_test() {
-  // Arrange
-  let opensearch = architecture_opensearch.create_client()
+pub fn tests() -> TestSuite {
+  describe("architecture snippet", [
+    it("create client uses localhost 9200", fn() {
+      // Arrange
+      let opensearch = architecture_opensearch.create_client()
 
-  // Act
-  let base_url = opensearch.base_url
+      // Act
+      let base_url = opensearch.base_url
 
-  // Assert
-  base_url |> should.equal("http://localhost:9200")
-}
+      // Assert
+      base_url
+      |> should
+      |> be_equal("http://localhost:9200")
+      |> or_fail_with("create client uses localhost 9200")
+    }),
+    it("index log entry stores the message under doc-id-123", fn() {
+      // Act
+      let stored = {
+        use opensearch, index <- opensearch_cluster.with_index("logs")
+        use _ <- result.try(architecture_opensearch.index_log_entry(
+          opensearch,
+          index,
+          "Started",
+        ))
+        use body <- result.try(client.send_request(
+          opensearch,
+          http.Get,
+          "/" <> index <> "/_doc/doc-id-123",
+          "",
+        ))
+        json.parse(body, decode.at(["_source", "message"], decode.string))
+        |> result.replace_error("Unexpected document: " <> body)
+      }
 
-pub fn index_log_entry_sends_put_to_the_document_path_test() {
-  // Arrange
-  let server = opensearch_test_server.start(Respond(201, "{}"))
-  let opensearch = client.new(opensearch_test_server.base_url(server))
+      // Assert
+      stored
+      |> should
+      |> be_equal(Ok("Started"))
+      |> or_fail_with("The message should be stored")
+    }),
+    it("index log entry returns the created response body", fn() {
+      // Act
+      let answered = {
+        use opensearch, index <- opensearch_cluster.with_index("logs")
+        // The index name varies, so put the name of the example in its place
+        architecture_opensearch.index_log_entry(opensearch, index, "Started")
+        |> result.map(string.replace(_, index, "logs"))
+      }
 
-  // Act
-  let _ = architecture_opensearch.index_log_entry(opensearch, "Started")
-
-  // Assert
-  opensearch_test_server.await_request(server)
-  |> should.be_ok
-  |> opensearch_test_server.request_line
-  |> should.equal(#("PUT", "/logs/_doc/doc-id-123"))
-}
-
-pub fn index_log_entry_sends_the_message_as_json_test() {
-  // Arrange
-  let server = opensearch_test_server.start(Respond(201, "{}"))
-  let opensearch = client.new(opensearch_test_server.base_url(server))
-
-  // Act
-  let _ = architecture_opensearch.index_log_entry(opensearch, "Started")
-
-  // Assert
-  let request = opensearch_test_server.await_request(server) |> should.be_ok
-  request.body |> should.equal("{\"message\":\"Started\"}")
-}
-
-pub fn index_log_entry_returns_the_response_body_test() {
-  // Arrange
-  let server =
-    opensearch_test_server.start(Respond(201, "{\"result\":\"created\"}"))
-  let opensearch = client.new(opensearch_test_server.base_url(server))
-
-  // Act
-  let result = architecture_opensearch.index_log_entry(opensearch, "Started")
-
-  // Assert
-  result |> should.equal(Ok("{\"result\":\"created\"}"))
+      // Assert
+      answered
+      |> should
+      |> be_equal(Ok(
+        "{\"_index\":\"logs\",\"_id\":\"doc-id-123\",\"_version\":1,\"result\":\"created\",\"_shards\":{\"total\":2,\"successful\":1,\"failed\":0},\"_seq_no\":0,\"_primary_term\":1}",
+      ))
+      |> or_fail_with("index log entry returns the response body")
+    }),
+  ])
 }

@@ -1,0 +1,1 @@
+{"error":{"root_cause":[{"type":"invalid_index_name_exception","reason":"Invalid index name [Books], must be lowercase","index":"Books","index_uuid":"_na_"}],"type":"invalid_index_name_exception","reason":"Invalid index name [Books], must be lowercase","index":"Books","index_uuid":"_na_"},"status":400}

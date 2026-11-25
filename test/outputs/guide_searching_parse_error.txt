@@ -1,0 +1,1 @@
+{"error":{"root_cause":[{"type":"parsing_exception","reason":"unknown query [matches] did you mean any of [match, match_all]?","line":1,"col":21}],"type":"parsing_exception","reason":"unknown query [matches] did you mean any of [match, match_all]?","line":1,"col":21,"caused_by":{"type":"named_object_not_found_exception","reason":"[1:21] unknown field [matches]"}},"status":400}

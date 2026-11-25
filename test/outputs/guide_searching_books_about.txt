@@ -1,0 +1,1 @@
+Ok(SearchResult(total: 2, books: [Book(id: "1", title: "Programming Gleam", author: "Jo Lee", year: 2024, in_stock: True), Book(id: "2", title: "Gleam for Erlang Developers", author: "Sam Park", year: 2022, in_stock: False)]))

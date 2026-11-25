@@ -1,0 +1,1 @@
+OpenSearch request to https://search.example.com:9200 failed: Connection failed: Connection refused
