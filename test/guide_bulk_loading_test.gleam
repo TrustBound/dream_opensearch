@@ -76,12 +76,10 @@ const rejected =
 /// The number of documents in `index`, after a refresh.
 fn count(opensearch: Client, index: String) -> Result(Int, String) {
   use Nil <- result.try(opensearch_cluster.refresh(opensearch, index))
-  use body <- result.try(client.send_request(
-    opensearch,
-    http.Get,
-    "/" <> index <> "/_count",
-    "",
-  ))
+  use body <- result.try(
+    client.send_request(opensearch, http.Get, "/" <> index <> "/_count", "")
+    |> opensearch_cluster.as_text,
+  )
   json.parse(body, decode.at(["count"], decode.int))
   |> result.replace_error("Unexpected count response: " <> body)
 }
@@ -91,6 +89,7 @@ fn create_books_index(
   index: String,
 ) -> Result(Nil, String) {
   guide_managing_indexes_create.create_books_index(opensearch, index)
+  |> opensearch_cluster.as_text
 }
 
 /// A book whose title alone is larger than the 1 MB limit of the node.
@@ -125,10 +124,10 @@ fn labelled_item(item: FailedItem) -> String {
 fn bulk_answer(books: List(Book)) -> Result(Dynamic, String) {
   use opensearch, index <- opensearch_cluster.with_index("books")
   use Nil <- result.try(create_books_index(opensearch, index))
-  use body <- result.try(document.bulk(
-    opensearch,
-    guide_bulk_loading_books.bulk_body(index, books),
-  ))
+  use body <- result.try(
+    document.bulk(opensearch, guide_bulk_loading_books.bulk_body(index, books))
+    |> opensearch_cluster.as_text,
+  )
   guide_output.stable_body(body, index, "books", varying_fields)
 }
 
@@ -259,12 +258,15 @@ pub fn tests() -> TestSuite {
         // Act
         let failed = {
           use opensearch, index <- opensearch_cluster.with_index("books")
-          use _ <- result.try(document.index(
-            opensearch,
-            index,
-            "1",
-            "{\"title\":\"Programming Gleam\"}",
-          ))
+          use _ <- result.try(
+            document.index(
+              opensearch,
+              index,
+              "1",
+              "{\"title\":\"Programming Gleam\"}",
+            )
+            |> opensearch_cluster.as_text,
+          )
           let action = fn(name, id) {
             "{\""
             <> name
@@ -280,7 +282,9 @@ pub fn tests() -> TestSuite {
             <> action("update", "9")
             <> "{\"doc\":{\"title\":\"Missing\"}}\n"
             <> action("delete", "8")
-          use body <- result.try(document.bulk(opensearch, ndjson))
+          use body <- result.try(
+            document.bulk(opensearch, ndjson) |> opensearch_cluster.as_text,
+          )
           guide_bulk_loading_books.failed_items(body)
         }
 
@@ -347,7 +351,8 @@ pub fn tests() -> TestSuite {
             Respond(200, guide_responses.two_books_loaded),
             Respond(200, guide_responses.book_three_failed),
           ])
-        let opensearch = client.new(opensearch_test_server.base_url(server))
+        let opensearch =
+          opensearch_cluster.client_for(opensearch_test_server.base_url(server))
         let books = [programming_gleam, gleam_for_erlang, far_future]
 
         // Act
@@ -404,7 +409,9 @@ pub fn tests() -> TestSuite {
         // Assert
         loaded
         |> should
-        |> be_equal(Ok(#(Error(""), 2)))
+        |> be_equal(
+          Ok(#(Error("OpenSearch rejected the request with status 413: "), 2)),
+        )
         |> or_fail_with("A 413 has no body, and the first batch stays stored")
       }),
     ]),
@@ -436,7 +443,7 @@ pub fn tests() -> TestSuite {
       }),
       it("retry_rejected sends nothing when nothing was rejected", fn() {
         // Arrange
-        let opensearch = client.new("http://127.0.0.1:1")
+        let opensearch = opensearch_cluster.client_for("http://127.0.0.1:1")
 
         // Act
         let still_failed =
@@ -483,6 +490,7 @@ pub fn tests() -> TestSuite {
 
         // Assert
         sent
+        |> opensearch_cluster.rejected_body
         |> result.map_error(guide_output.lines)
         |> should
         |> be_equal(
@@ -500,6 +508,7 @@ pub fn tests() -> TestSuite {
               <> index
               <> "\",\"_id\":\"1\"}}\n{\"title\":\n\"Programming Gleam\"}\n",
           )
+          |> opensearch_cluster.rejected_body
           |> Ok
         }
 
@@ -526,7 +535,7 @@ pub fn tests() -> TestSuite {
         loaded
         |> should
         |> be_equal(Error(
-          "{\"error\":{\"root_cause\":[{\"type\":\"parse_exception\",\"reason\":\"request body is required\"}],\"type\":\"parse_exception\",\"reason\":\"request body is required\"},\"status\":400}",
+          "OpenSearch rejected the request with status 400: {\"error\":{\"root_cause\":[{\"type\":\"parse_exception\",\"reason\":\"request body is required\"}],\"type\":\"parse_exception\",\"reason\":\"request body is required\"},\"status\":400}",
         ))
         |> or_fail_with("OpenSearch refuses an empty bulk body")
       }),

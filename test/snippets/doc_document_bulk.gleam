@@ -1,12 +1,12 @@
 //// Example for the `document.bulk` doc.
 
-import dream_opensearch/client.{type Client}
+import dream_opensearch/client.{type Client, type OpenSearchError}
 import dream_opensearch/document
 
 pub fn bulk_index_users(
   opensearch: Client,
   index: String,
-) -> Result(String, String) {
+) -> Result(String, OpenSearchError) {
   // NDJSON format: action and document on alternating lines
   let ndjson =
     "{ \"index\": { \"_index\": \""

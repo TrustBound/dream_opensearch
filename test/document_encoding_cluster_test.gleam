@@ -39,7 +39,9 @@ fn search_ids(
   index: String,
   query_json: String,
 ) -> Result(List(String), String) {
-  use body <- result.try(document.search(opensearch, index, query_json))
+  use body <- result.try(
+    document.search(opensearch, index, query_json) |> opensearch_cluster.as_text,
+  )
   hit_ids(body)
 }
 
@@ -64,11 +66,19 @@ fn delete_result(body: String) -> Result(String, String) {
 /// lists the documents that are left.
 fn round_trip(id: String) -> Result(RoundTrip, String) {
   use opensearch, index <- opensearch_cluster.with_index("ids")
-  use _ <- result.try(document.index(opensearch, index, "a", "{\"n\":1}"))
-  use _ <- result.try(document.index(opensearch, index, id, "{\"n\":2}"))
+  use _ <- result.try(
+    document.index(opensearch, index, "a", "{\"n\":1}")
+    |> opensearch_cluster.as_text,
+  )
+  use _ <- result.try(
+    document.index(opensearch, index, id, "{\"n\":2}")
+    |> opensearch_cluster.as_text,
+  )
   use Nil <- result.try(opensearch_cluster.refresh(opensearch, index))
   use found_ids <- result.try(search_ids(opensearch, index, ids_query(id)))
-  use deleted_body <- result.try(document.delete(opensearch, index, id))
+  use deleted_body <- result.try(
+    document.delete(opensearch, index, id) |> opensearch_cluster.as_text,
+  )
   use deleted <- result.try(delete_result(deleted_body))
   use Nil <- result.try(opensearch_cluster.refresh(opensearch, index))
   use left_ids <- result.try(search_ids(
@@ -92,7 +102,8 @@ fn error_type_and_reason(body: String) -> Result(#(String, String), String) {
 fn create_refused_index(name: String) -> Result(#(String, String), String) {
   case document.create_index(opensearch_cluster.client(), name, "{}") {
     Ok(body) -> Error("OpenSearch created the index: " <> body)
-    Error(body) -> error_type_and_reason(body)
+    Error(client.Rejected(body:, ..)) -> error_type_and_reason(body)
+    Error(error) -> Error(client.describe_error(error))
   }
 }
 

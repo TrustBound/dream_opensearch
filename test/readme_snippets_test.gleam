@@ -32,16 +32,25 @@ fn result_field(body: String) -> Result(String, String) {
 fn quick_start() -> Result(#(String, List(String), String), String) {
   let opensearch = opensearch_cluster.client()
   let outcome = {
-    use indexed <- result.try(readme_quick_start.index_alice(opensearch))
+    use indexed <- result.try(
+      readme_quick_start.index_alice(opensearch) |> opensearch_cluster.as_text,
+    )
     use created <- result.try(result_field(indexed))
     use Nil <- result.try(opensearch_cluster.refresh(opensearch, "users"))
-    use found <- result.try(readme_quick_start.search_for_alice(opensearch))
+    use found <- result.try(
+      readme_quick_start.search_for_alice(opensearch)
+      |> opensearch_cluster.as_text,
+    )
     use found_ids <- result.try(hit_ids(found))
-    use deleted <- result.try(readme_quick_start.delete_alice(opensearch))
+    use deleted <- result.try(
+      readme_quick_start.delete_alice(opensearch) |> opensearch_cluster.as_text,
+    )
     use deleted_result <- result.try(result_field(deleted))
     Ok(#(created, found_ids, deleted_result))
   }
-  use _ <- result.try(document.delete_index(opensearch, "users"))
+  use _ <- result.try(
+    document.delete_index(opensearch, "users") |> opensearch_cluster.as_text,
+  )
   outcome
 }
 
@@ -53,9 +62,10 @@ pub fn tests() -> TestSuite {
         let opensearch = readme_quick_start.create_client()
 
         // Assert
-        opensearch.base_url
+        opensearch
+        |> result.map(opensearch_cluster.base_url_of)
         |> should
-        |> be_equal("http://localhost:9200")
+        |> be_equal(Ok("http://localhost:9200"))
         |> or_fail_with("quick start create client uses localhost 9200")
       }),
       it("indexes, finds and deletes Alice on a real cluster", fn() {

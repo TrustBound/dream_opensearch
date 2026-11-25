@@ -6,10 +6,10 @@
 ////
 //// ## Quick Start
 ////
-//// ### Search with query builders <a href="https://github.com/TrustBound/dream_opensearch/blob/3.0.0/test/snippets/doc_query_quick_start.gleam#L3-L23"><img align="right" alt="Tested snippet" src="https://img.shields.io/badge/%F0%9F%A7%AA_tested-snippet-lightgreen.svg?style=flat-square"></a>
+//// ### Search with query builders <a href="https://github.com/TrustBound/dream_opensearch/blob/4.0.0/test/snippets/doc_query_quick_start.gleam#L3-L23"><img align="right" alt="Tested snippet" src="https://img.shields.io/badge/%F0%9F%A7%AA_tested-snippet-lightgreen.svg?style=flat-square"></a>
 ////
 //// ```gleam
-//// import dream_opensearch/client.{type Client}
+//// import dream_opensearch/client.{type Client, type OpenSearchError}
 //// import dream_opensearch/document
 //// import dream_opensearch/query
 ////
@@ -17,7 +17,7 @@
 //// pub fn search_by_name(
 ////   opensearch: Client,
 ////   index: String,
-//// ) -> Result(String, String) {
+//// ) -> Result(String, OpenSearchError) {
 ////   let name_query = query.match("name", "Alice")
 ////   document.search(opensearch, index, name_query)
 //// }
@@ -26,7 +26,7 @@
 //// pub fn search_by_status(
 ////   opensearch: Client,
 ////   index: String,
-//// ) -> Result(String, String) {
+//// ) -> Result(String, OpenSearchError) {
 ////   let status_query = query.term("status", "active")
 ////   document.search(opensearch, index, status_query)
 //// }
@@ -36,7 +36,7 @@
 ////
 //// For complex queries, build the JSON manually using `gleam/json`:
 ////
-//// ### Build a custom query <a href="https://github.com/TrustBound/dream_opensearch/blob/3.0.0/test/snippets/doc_query_custom.gleam#L3-L27"><img align="right" alt="Tested snippet" src="https://img.shields.io/badge/%F0%9F%A7%AA_tested-snippet-lightgreen.svg?style=flat-square"></a>
+//// ### Build a custom query <a href="https://github.com/TrustBound/dream_opensearch/blob/4.0.0/test/snippets/doc_query_custom.gleam#L3-L27"><img align="right" alt="Tested snippet" src="https://img.shields.io/badge/%F0%9F%A7%AA_tested-snippet-lightgreen.svg?style=flat-square"></a>
 ////
 //// ```gleam
 //// import gleam/json
@@ -84,17 +84,17 @@ import gleam/json
 ///
 /// ## Example
 ///
-/// ### Search all documents <a href="https://github.com/TrustBound/dream_opensearch/blob/3.0.0/test/snippets/doc_query_match_all.gleam#L3-L13"><img align="right" alt="Tested snippet" src="https://img.shields.io/badge/%F0%9F%A7%AA_tested-snippet-lightgreen.svg?style=flat-square"></a>
+/// ### Search all documents <a href="https://github.com/TrustBound/dream_opensearch/blob/4.0.0/test/snippets/doc_query_match_all.gleam#L3-L13"><img align="right" alt="Tested snippet" src="https://img.shields.io/badge/%F0%9F%A7%AA_tested-snippet-lightgreen.svg?style=flat-square"></a>
 ///
 /// ```gleam
-/// import dream_opensearch/client.{type Client}
+/// import dream_opensearch/client.{type Client, type OpenSearchError}
 /// import dream_opensearch/document
 /// import dream_opensearch/query
 ///
 /// pub fn search_all_users(
 ///   opensearch: Client,
 ///   index: String,
-/// ) -> Result(String, String) {
+/// ) -> Result(String, OpenSearchError) {
 ///   let all_query = query.match_all()
 ///   document.search(opensearch, index, all_query)
 /// }
@@ -126,10 +126,10 @@ pub fn match_all() -> String {
 ///
 /// ## Example
 ///
-/// ### Search for an exact value <a href="https://github.com/TrustBound/dream_opensearch/blob/3.0.0/test/snippets/doc_query_term.gleam#L3-L14"><img align="right" alt="Tested snippet" src="https://img.shields.io/badge/%F0%9F%A7%AA_tested-snippet-lightgreen.svg?style=flat-square"></a>
+/// ### Search for an exact value <a href="https://github.com/TrustBound/dream_opensearch/blob/4.0.0/test/snippets/doc_query_term.gleam#L3-L14"><img align="right" alt="Tested snippet" src="https://img.shields.io/badge/%F0%9F%A7%AA_tested-snippet-lightgreen.svg?style=flat-square"></a>
 ///
 /// ```gleam
-/// import dream_opensearch/client.{type Client}
+/// import dream_opensearch/client.{type Client, type OpenSearchError}
 /// import dream_opensearch/document
 /// import dream_opensearch/query
 ///
@@ -137,7 +137,7 @@ pub fn match_all() -> String {
 /// pub fn search_active_users(
 ///   opensearch: Client,
 ///   index: String,
-/// ) -> Result(String, String) {
+/// ) -> Result(String, OpenSearchError) {
 ///   let status_query = query.term("status", "active")
 ///   document.search(opensearch, index, status_query)
 /// }
@@ -177,10 +177,10 @@ pub fn term(field: String, value: String) -> String {
 ///
 /// ## Example
 ///
-/// ### Search a range <a href="https://github.com/TrustBound/dream_opensearch/blob/3.0.0/test/snippets/doc_query_range.gleam#L3-L14"><img align="right" alt="Tested snippet" src="https://img.shields.io/badge/%F0%9F%A7%AA_tested-snippet-lightgreen.svg?style=flat-square"></a>
+/// ### Search a range <a href="https://github.com/TrustBound/dream_opensearch/blob/4.0.0/test/snippets/doc_query_range.gleam#L3-L14"><img align="right" alt="Tested snippet" src="https://img.shields.io/badge/%F0%9F%A7%AA_tested-snippet-lightgreen.svg?style=flat-square"></a>
 ///
 /// ```gleam
-/// import dream_opensearch/client.{type Client}
+/// import dream_opensearch/client.{type Client, type OpenSearchError}
 /// import dream_opensearch/document
 /// import dream_opensearch/query
 ///
@@ -188,7 +188,7 @@ pub fn term(field: String, value: String) -> String {
 /// pub fn search_products_by_price(
 ///   opensearch: Client,
 ///   index: String,
-/// ) -> Result(String, String) {
+/// ) -> Result(String, OpenSearchError) {
 ///   let price_query = query.range("price", "10", "100")
 ///   document.search(opensearch, index, price_query)
 /// }
@@ -238,10 +238,10 @@ pub fn range(field: String, gte: String, lte: String) -> String {
 ///
 /// ## Example
 ///
-/// ### Search the text of a field <a href="https://github.com/TrustBound/dream_opensearch/blob/3.0.0/test/snippets/doc_query_match.gleam#L3-L14"><img align="right" alt="Tested snippet" src="https://img.shields.io/badge/%F0%9F%A7%AA_tested-snippet-lightgreen.svg?style=flat-square"></a>
+/// ### Search the text of a field <a href="https://github.com/TrustBound/dream_opensearch/blob/4.0.0/test/snippets/doc_query_match.gleam#L3-L14"><img align="right" alt="Tested snippet" src="https://img.shields.io/badge/%F0%9F%A7%AA_tested-snippet-lightgreen.svg?style=flat-square"></a>
 ///
 /// ```gleam
-/// import dream_opensearch/client.{type Client}
+/// import dream_opensearch/client.{type Client, type OpenSearchError}
 /// import dream_opensearch/document
 /// import dream_opensearch/query
 ///
@@ -249,7 +249,7 @@ pub fn range(field: String, gte: String, lte: String) -> String {
 /// pub fn search_users_named_alice(
 ///   opensearch: Client,
 ///   index: String,
-/// ) -> Result(String, String) {
+/// ) -> Result(String, OpenSearchError) {
 ///   let name_query = query.match("name", "Alice")
 ///   document.search(opensearch, index, name_query)
 /// }

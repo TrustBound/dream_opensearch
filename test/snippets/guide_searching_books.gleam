@@ -26,7 +26,10 @@ pub fn search_books(
   index: String,
   query_json: String,
 ) -> Result(SearchResult, String) {
-  use body <- result.try(document.search(opensearch, index, query_json))
+  use body <- result.try(
+    document.search(opensearch, index, query_json)
+    |> result.map_error(client.describe_error),
+  )
   search_result_from_response(body)
 }
 

@@ -1,0 +1,1 @@
+{"version":"1.0","entries":[{"request":{"method":"DELETE","scheme":"http","host":"localhost","port":9201,"path":"/recorded_books","query":null,"headers":[["content-type","application/json"]],"body":""},"response":{"mode":"blocking","status":200,"headers":[["content-type","application/json; charset=UTF-8"],["content-length","47"]],"body":"{\"acknowledged\":true}"}}]}

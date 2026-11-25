@@ -26,6 +26,10 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+        with:
+          # The whole history with the tags: the snippet check reads the
+          # code of the upgrade guide at the tag of the older release.
+          fetch-depth: 0
 
       # Keep downloaded packages and path dependency fingerprints between runs,
       # so gleam does not ask the Hex API to resolve versions on every run.

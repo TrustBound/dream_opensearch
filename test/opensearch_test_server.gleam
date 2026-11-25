@@ -19,6 +19,9 @@ pub type Reply {
   CaptureRawBytes
   /// Read the request, then close the connection with no answer.
   CloseWithoutAnswer
+  /// Read the request, then send nothing until the client closes the
+  /// connection (or 3 seconds pass).
+  HoldWithoutAnswer
 }
 
 /// The request as it arrived on the wire. Header names are lowercase.

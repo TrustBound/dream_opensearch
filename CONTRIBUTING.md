@@ -39,6 +39,11 @@ dream_opensearch is part of the [Dream](https://github.com/TrustBound/dream) fam
    to use other nodes. A few failure tests use a small local server on
    127.0.0.1.
 
+   The round trip through a `dream_http_client` recorder plays back the
+   recordings in `test/recordings/`, with no cluster. To record them
+   again, run `RECORD_OPENSEARCH=true make test` with the OpenSearch of
+   `make search-up` running.
+
 3. **Make your changes:**
    - Write code following Dream's [design principles](https://github.com/TrustBound/dream/blob/release/3.0.0/docs/reference/design-principles.md)
    - Add tests for new functionality

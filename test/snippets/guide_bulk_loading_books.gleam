@@ -55,7 +55,10 @@ pub fn load_books(
   index: String,
   books: List(Book),
 ) -> Result(List(FailedItem), String) {
-  use body <- result.try(document.bulk(opensearch, bulk_body(index, books)))
+  use body <- result.try(
+    document.bulk(opensearch, bulk_body(index, books))
+    |> result.map_error(client.describe_error),
+  )
   failed_items(body)
 }
 

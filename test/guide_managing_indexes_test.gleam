@@ -32,7 +32,7 @@ import snippets/guide_managing_indexes_maintain
 
 fn client_for_body(body: String) -> Client {
   let server = opensearch_test_server.start(Respond(200, body))
-  client.new(opensearch_test_server.base_url(server))
+  opensearch_cluster.client_for(opensearch_test_server.base_url(server))
 }
 
 fn load_two_books(opensearch: Client, index: String) -> Result(Nil, String) {
@@ -47,15 +47,17 @@ fn load_two_books(opensearch: Client, index: String) -> Result(Nil, String) {
       <> "{\"title\":\"Gleam for Erlang Developers\",\"author\":\"Sam Park\",\"year\":2022,\"in_stock\":false}\n",
   )
   |> result.replace(Nil)
+  |> opensearch_cluster.as_text
 }
 
 fn create_and_load(opensearch: Client, index: String) -> Result(Nil, String) {
-  use Nil <- result.try(guide_managing_indexes_create.create_books_index(
-    opensearch,
-    index,
-  ))
+  use Nil <- result.try(
+    guide_managing_indexes_create.create_books_index(opensearch, index)
+    |> opensearch_cluster.as_text,
+  )
   use Nil <- result.try(load_two_books(opensearch, index))
   guide_managing_indexes_maintain.refresh_index(opensearch, index)
+  |> opensearch_cluster.as_text
 }
 
 fn hit_total(body: String) -> Result(Int, String) {
@@ -110,11 +112,14 @@ pub fn tests() -> TestSuite {
         // Act
         let created = {
           use opensearch, index <- opensearch_cluster.with_index("books")
-          use body <- result.try(document.create_index(
-            opensearch,
-            index,
-            guide_managing_indexes_create.books_index_body(),
-          ))
+          use body <- result.try(
+            document.create_index(
+              opensearch,
+              index,
+              guide_managing_indexes_create.books_index_body(),
+            )
+            |> opensearch_cluster.as_text,
+          )
           stable_body(body, index)
         }
 
@@ -129,13 +134,15 @@ pub fn tests() -> TestSuite {
         let created = {
           use opensearch, index <- opensearch_cluster.with_index("books")
           use Nil <- result.try(
-            guide_managing_indexes_create.create_books_index(opensearch, index),
+            guide_managing_indexes_create.create_books_index(opensearch, index)
+            |> opensearch_cluster.as_text,
           )
           case
             guide_managing_indexes_create.create_books_index(opensearch, index)
           {
             Ok(Nil) -> Error("Expected a 400 for an index that exists")
-            Error(body) -> stable_body(body, index)
+            Error(client.Rejected(body:, ..)) -> stable_body(body, index)
+            Error(error) -> Error(client.describe_error(error))
           }
         }
 
@@ -150,7 +157,8 @@ pub fn tests() -> TestSuite {
         let indexed = {
           use opensearch, index <- opensearch_cluster.with_index("books")
           use Nil <- result.try(
-            guide_managing_indexes_create.create_books_index(opensearch, index),
+            guide_managing_indexes_create.create_books_index(opensearch, index)
+            |> opensearch_cluster.as_text,
           )
           document.index(
             opensearch,
@@ -197,6 +205,7 @@ pub fn tests() -> TestSuite {
 
         // Assert
         ensured
+        |> opensearch_cluster.rejected_body
         |> result.map_error(guide_output.lines)
         |> should
         |> be_equal(
@@ -211,9 +220,11 @@ pub fn tests() -> TestSuite {
         let exists = {
           use opensearch, index <- opensearch_cluster.with_index("books")
           use Nil <- result.try(
-            guide_managing_indexes_create.create_books_index(opensearch, index),
+            guide_managing_indexes_create.create_books_index(opensearch, index)
+            |> opensearch_cluster.as_text,
           )
           guide_managing_indexes_maintain.index_exists(opensearch, index)
+          |> opensearch_cluster.as_text
         }
 
         // Assert
@@ -227,6 +238,7 @@ pub fn tests() -> TestSuite {
         let exists = {
           use opensearch, index <- opensearch_cluster.with_index("books")
           guide_managing_indexes_maintain.index_exists(opensearch, index)
+          |> opensearch_cluster.as_text
         }
 
         // Assert
@@ -247,7 +259,7 @@ pub fn tests() -> TestSuite {
         // Assert
         exists
         |> should
-        |> be_equal(Error("Unauthorized"))
+        |> be_equal(Error(client.Rejected(status: 401, body: "Unauthorized")))
         |> or_fail_with("A wrong password is not a missing index")
       }),
       it("a HEAD with a wrong password gets an empty error", fn() {
@@ -261,21 +273,23 @@ pub fn tests() -> TestSuite {
         // Assert
         checked
         |> should
-        |> be_equal(Error(""))
+        |> be_equal(Error(client.Rejected(status: 401, body: "")))
         |> or_fail_with("A HEAD answer has no body, a 401 neither")
       }),
       it("index_exists keeps a connection error", fn() {
         // Act
         let exists =
           guide_managing_indexes_maintain.index_exists(
-            client.new("http://127.0.0.1:1"),
+            opensearch_cluster.client_for("http://127.0.0.1:1"),
             "books",
           )
 
         // Assert
         exists
         |> should
-        |> be_equal(Error("Connection failed: Connection refused"))
+        |> be_equal(
+          Error(client.Unavailable("Connection failed: Connection refused")),
+        )
         |> or_fail_with("A refused connection is not a missing index")
       }),
       it("count_documents counts the documents after a refresh", fn() {
@@ -321,17 +335,21 @@ pub fn tests() -> TestSuite {
             guide_managing_indexes_create.create_books_index(
               opensearch,
               destination,
-            ),
+            )
+            |> opensearch_cluster.as_text,
           )
           use created <- result.try(guide_managing_indexes_maintain.copy_index(
             opensearch,
             source,
             destination,
           ))
-          use Nil <- result.try(guide_managing_indexes_maintain.refresh_index(
-            opensearch,
-            destination,
-          ))
+          use Nil <- result.try(
+            guide_managing_indexes_maintain.refresh_index(
+              opensearch,
+              destination,
+            )
+            |> opensearch_cluster.as_text,
+          )
           use counted <- result.try(
             guide_managing_indexes_maintain.count_documents(
               opensearch,
@@ -354,7 +372,8 @@ pub fn tests() -> TestSuite {
             200,
             guide_output.file("guide_managing_indexes_reindex_response"),
           ))
-        let opensearch = client.new(opensearch_test_server.base_url(server))
+        let opensearch =
+          opensearch_cluster.client_for(opensearch_test_server.base_url(server))
 
         // Act
         let _copied =
@@ -387,18 +406,22 @@ pub fn tests() -> TestSuite {
             guide_managing_indexes_create.create_books_index(
               opensearch,
               destination,
-            ),
+            )
+            |> opensearch_cluster.as_text,
           )
-          use body <- result.try(client.send_request(
-            opensearch,
-            http.Post,
-            "/_reindex",
-            "{\"source\":{\"index\":\""
-              <> source
-              <> "\"},\"dest\":{\"index\":\""
-              <> destination
-              <> "\"}}",
-          ))
+          use body <- result.try(
+            client.send_request(
+              opensearch,
+              http.Post,
+              "/_reindex",
+              "{\"source\":{\"index\":\""
+                <> source
+                <> "\"},\"dest\":{\"index\":\""
+                <> destination
+                <> "\"}}",
+            )
+            |> opensearch_cluster.as_text,
+          )
           guide_output.stable_json(body, varying_fields)
         }
 
@@ -419,7 +442,7 @@ pub fn tests() -> TestSuite {
             source,
             destination,
           )
-          |> result.map_error(opensearch_cluster.error_type_and_status)
+          |> result.map_error(opensearch_cluster.described_type_and_status)
           |> Ok
         }
 
@@ -451,7 +474,8 @@ pub fn tests() -> TestSuite {
         let changed = {
           use opensearch, index <- opensearch_cluster.with_index("books")
           use Nil <- result.try(
-            guide_managing_indexes_create.create_books_index(opensearch, index),
+            guide_managing_indexes_create.create_books_index(opensearch, index)
+            |> opensearch_cluster.as_text,
           )
           client.send_request(
             opensearch,
@@ -474,15 +498,14 @@ pub fn tests() -> TestSuite {
         let total = {
           use opensearch, index <- opensearch_cluster.with_index("books")
           use Nil <- result.try(load_two_books(opensearch, index))
-          use Nil <- result.try(guide_managing_indexes_maintain.refresh_index(
-            opensearch,
-            index,
-          ))
-          use body <- result.try(document.search(
-            opensearch,
-            index,
-            query.term("author", "Jo Lee"),
-          ))
+          use Nil <- result.try(
+            guide_managing_indexes_maintain.refresh_index(opensearch, index)
+            |> opensearch_cluster.as_text,
+          )
+          use body <- result.try(
+            document.search(opensearch, index, query.term("author", "Jo Lee"))
+            |> opensearch_cluster.as_text,
+          )
           hit_total(body)
         }
 
@@ -499,7 +522,8 @@ pub fn tests() -> TestSuite {
         let deleted = {
           use opensearch, index <- opensearch_cluster.with_index("books")
           use Nil <- result.try(
-            guide_managing_indexes_create.create_books_index(opensearch, index),
+            guide_managing_indexes_create.create_books_index(opensearch, index)
+            |> opensearch_cluster.as_text,
           )
           let first =
             guide_managing_indexes_maintain.delete_index_if_present(
@@ -511,10 +535,10 @@ pub fn tests() -> TestSuite {
               opensearch,
               index,
             )
-          use exists <- result.try(guide_managing_indexes_maintain.index_exists(
-            opensearch,
-            index,
-          ))
+          use exists <- result.try(
+            guide_managing_indexes_maintain.index_exists(opensearch, index)
+            |> opensearch_cluster.as_text,
+          )
           Ok(#(first, second, exists))
         }
 
@@ -531,14 +555,18 @@ pub fn tests() -> TestSuite {
           use index <- opensearch_cluster.with_index_on(admin, "books")
           let user = opensearch_cluster.index_name("reader")
           let user_path = "/_plugins/_security/api/internalusers/" <> user
-          use _ <- result.try(client.send_request(
-            admin,
-            http.Put,
-            user_path,
-            "{\"password\":\"Reader-Pa55word!\",\"backend_roles\":[]}",
-          ))
+          use _ <- result.try(
+            client.send_request(
+              admin,
+              http.Put,
+              user_path,
+              "{\"password\":\"Reader-Pa55word!\",\"backend_roles\":[]}",
+            )
+            |> opensearch_cluster.as_text,
+          )
           use Nil <- result.try(
-            guide_managing_indexes_create.create_books_index(admin, index),
+            guide_managing_indexes_create.create_books_index(admin, index)
+            |> opensearch_cluster.as_text,
           )
           use reader <- result.try(opensearch_cluster.secured_client(
             user,
@@ -550,12 +578,10 @@ pub fn tests() -> TestSuite {
               index,
             )
             |> result.map_error(opensearch_cluster.error_type_and_status)
-          use _ <- result.try(client.send_request(
-            admin,
-            http.Delete,
-            user_path,
-            "",
-          ))
+          use _ <- result.try(
+            client.send_request(admin, http.Delete, user_path, "")
+            |> opensearch_cluster.as_text,
+          )
           Ok(outcome)
         }
 
@@ -575,17 +601,24 @@ pub fn tests() -> TestSuite {
               guide_managing_indexes_create.create_books_index(
                 opensearch,
                 index,
-              ),
+              )
+              |> opensearch_cluster.as_text,
             )
             use Nil <- result.try(
-              guide_managing_indexes_create.create_books_index(opensearch, copy),
+              guide_managing_indexes_create.create_books_index(opensearch, copy)
+              |> opensearch_cluster.as_text,
             )
-            use _ <- result.try(document.delete_index(opensearch, index <> "*"))
+            use _ <- result.try(
+              document.delete_index(opensearch, index <> "*")
+              |> opensearch_cluster.as_text,
+            )
             use index_exists <- result.try(
-              guide_managing_indexes_maintain.index_exists(opensearch, index),
+              guide_managing_indexes_maintain.index_exists(opensearch, index)
+              |> opensearch_cluster.as_text,
             )
             use copy_exists <- result.try(
-              guide_managing_indexes_maintain.index_exists(opensearch, copy),
+              guide_managing_indexes_maintain.index_exists(opensearch, copy)
+              |> opensearch_cluster.as_text,
             )
             Ok(#(index_exists, copy_exists))
           }
@@ -593,7 +626,8 @@ pub fn tests() -> TestSuite {
             guide_managing_indexes_maintain.delete_index_if_present(
               opensearch,
               copy,
-            ),
+            )
+            |> opensearch_cluster.as_text,
           )
           outcome
         }

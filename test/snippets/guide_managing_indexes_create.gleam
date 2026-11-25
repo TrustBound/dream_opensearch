@@ -3,7 +3,7 @@
 //// Creates an index for books with settings and a strict mapping, and
 //// creates it only when it is missing.
 
-import dream_opensearch/client.{type Client}
+import dream_opensearch/client.{type Client, type OpenSearchError, Rejected}
 import dream_opensearch/document
 import gleam/dynamic/decode
 import gleam/json
@@ -47,7 +47,7 @@ fn field_type(name: String) -> json.Json {
 pub fn create_books_index(
   opensearch: Client,
   index_name: String,
-) -> Result(Nil, String) {
+) -> Result(Nil, OpenSearchError) {
   document.create_index(opensearch, index_name, books_index_body())
   |> result.replace(Nil)
 }
@@ -56,14 +56,24 @@ pub fn create_books_index(
 pub fn ensure_books_index(
   opensearch: Client,
   index_name: String,
-) -> Result(Nil, String) {
+) -> Result(Nil, OpenSearchError) {
   create_books_index(opensearch, index_name)
   |> result.try_recover(accept_existing)
 }
 
-fn accept_existing(body: String) -> Result(Nil, String) {
+fn accept_existing(error: OpenSearchError) -> Result(Nil, OpenSearchError) {
+  case error {
+    Rejected(status: 400, body:) -> accept_existing_body(error, body)
+    _ -> Error(error)
+  }
+}
+
+fn accept_existing_body(
+  error: OpenSearchError,
+  body: String,
+) -> Result(Nil, OpenSearchError) {
   case json.parse(body, decode.at(["error", "type"], decode.string)) {
     Ok("resource_already_exists_exception") -> Ok(Nil)
-    _ -> Error(body)
+    _ -> Error(error)
   }
 }

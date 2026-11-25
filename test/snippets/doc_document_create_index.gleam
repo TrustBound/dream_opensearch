@@ -1,13 +1,13 @@
 //// Example for the `document.create_index` doc.
 
-import dream_opensearch/client.{type Client}
+import dream_opensearch/client.{type Client, type OpenSearchError}
 import dream_opensearch/document
 import gleam/json
 
 pub fn create_users_index(
   opensearch: Client,
   index: String,
-) -> Result(String, String) {
+) -> Result(String, OpenSearchError) {
   let mapping =
     json.object([
       #(

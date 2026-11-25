@@ -44,10 +44,10 @@ Every example in this guide is tested against OpenSearch 2.19.1 in Docker. [Gett
 
 The request that creates an index takes a body with two parts: `settings`, which set up the index, and `mappings`, which set the type of each field. Build both with `gleam/json`. This is the start of a `books_index` module:
 
-### Create the books index with settings and a mapping <a href="https://github.com/TrustBound/dream_opensearch/blob/3.0.0/test/snippets/guide_managing_indexes_create.gleam#L6-L53"><img align="right" alt="Tested snippet" src="https://img.shields.io/badge/%F0%9F%A7%AA_tested-snippet-lightgreen.svg?style=flat-square"></a>
+### Create the books index with settings and a mapping <a href="https://github.com/TrustBound/dream_opensearch/blob/4.0.0/test/snippets/guide_managing_indexes_create.gleam#L6-L53"><img align="right" alt="Tested snippet" src="https://img.shields.io/badge/%F0%9F%A7%AA_tested-snippet-lightgreen.svg?style=flat-square"></a>
 
 ```gleam
-import dream_opensearch/client.{type Client}
+import dream_opensearch/client.{type Client, type OpenSearchError, Rejected}
 import dream_opensearch/document
 import gleam/dynamic/decode
 import gleam/json
@@ -91,7 +91,7 @@ fn field_type(name: String) -> json.Json {
 pub fn create_books_index(
   opensearch: Client,
   index_name: String,
-) -> Result(Nil, String) {
+) -> Result(Nil, OpenSearchError) {
   document.create_index(opensearch, index_name, books_index_body())
   |> result.replace(Nil)
 }
@@ -99,7 +99,7 @@ pub fn create_books_index(
 
 `books_index_body()` returns this body:
 
-### The body of books_index_body <a href="https://github.com/TrustBound/dream_opensearch/blob/3.0.0/test/outputs/guide_managing_indexes_books_index_body.txt"><img align="right" alt="Tested snippet" src="https://img.shields.io/badge/%F0%9F%A7%AA_tested-snippet-lightgreen.svg?style=flat-square"></a>
+### The body of books_index_body <a href="https://github.com/TrustBound/dream_opensearch/blob/4.0.0/test/outputs/guide_managing_indexes_books_index_body.txt"><img align="right" alt="Tested snippet" src="https://img.shields.io/badge/%F0%9F%A7%AA_tested-snippet-lightgreen.svg?style=flat-square"></a>
 
 ```text
 {"settings":{"number_of_shards":1,"number_of_replicas":1},"mappings":{"dynamic":"strict","properties":{"title":{"type":"text"},"author":{"type":"keyword"},"year":{"type":"integer"},"in_stock":{"type":"boolean"}}}}
@@ -107,7 +107,7 @@ pub fn create_books_index(
 
 `create_books_index(opensearch, "books")` sends it with `document.create_index`, as `PUT /books`. OpenSearch answers with status 200:
 
-### The answer to the create <a href="https://github.com/TrustBound/dream_opensearch/blob/3.0.0/test/outputs/guide_managing_indexes_created.txt"><img align="right" alt="Tested snippet" src="https://img.shields.io/badge/%F0%9F%A7%AA_tested-snippet-lightgreen.svg?style=flat-square"></a>
+### The answer to the create <a href="https://github.com/TrustBound/dream_opensearch/blob/4.0.0/test/outputs/guide_managing_indexes_created.txt"><img align="right" alt="Tested snippet" src="https://img.shields.io/badge/%F0%9F%A7%AA_tested-snippet-lightgreen.svg?style=flat-square"></a>
 
 ```text
 {"acknowledged":true,"shards_acknowledged":true,"index":"books"}
@@ -126,7 +126,7 @@ The index name goes in the URL path, and `document.create_index` percent-encodes
 
 You want the index to exist before your program writes to it, so the natural place for `create_books_index` is the start of the program. But the second start fails: the index is already there. OpenSearch answers with status 400:
 
-### The answer when the index exists <a href="https://github.com/TrustBound/dream_opensearch/blob/3.0.0/test/outputs/guide_managing_indexes_already_exists.txt"><img align="right" alt="Tested snippet" src="https://img.shields.io/badge/%F0%9F%A7%AA_tested-snippet-lightgreen.svg?style=flat-square"></a>
+### The answer when the index exists <a href="https://github.com/TrustBound/dream_opensearch/blob/4.0.0/test/outputs/guide_managing_indexes_already_exists.txt"><img align="right" alt="Tested snippet" src="https://img.shields.io/badge/%F0%9F%A7%AA_tested-snippet-lightgreen.svg?style=flat-square"></a>
 
 ```text
 {"error":{"root_cause":[{"type":"resource_already_exists_exception","reason":"index [books/szRdA72vTjirBMobGJfr3g] already exists","index":"books","index_uuid":"szRdA72vTjirBMobGJfr3g"}],"type":"resource_already_exists_exception","reason":"index [books/szRdA72vTjirBMobGJfr3g] already exists","index":"books","index_uuid":"szRdA72vTjirBMobGJfr3g"},"status":400}
@@ -134,35 +134,45 @@ You want the index to exist before your program writes to it, so the natural pla
 
 Accept that one error, and keep all others. Add this to the module:
 
-### Create the books index unless it exists <a href="https://github.com/TrustBound/dream_opensearch/blob/3.0.0/test/snippets/guide_managing_indexes_create.gleam#L55-L69"><img align="right" alt="Tested snippet" src="https://img.shields.io/badge/%F0%9F%A7%AA_tested-snippet-lightgreen.svg?style=flat-square"></a>
+### Create the books index unless it exists <a href="https://github.com/TrustBound/dream_opensearch/blob/4.0.0/test/snippets/guide_managing_indexes_create.gleam#L55-L79"><img align="right" alt="Tested snippet" src="https://img.shields.io/badge/%F0%9F%A7%AA_tested-snippet-lightgreen.svg?style=flat-square"></a>
 
 ```gleam
 /// Creates the index `index_name` for books, unless it already exists.
 pub fn ensure_books_index(
   opensearch: Client,
   index_name: String,
-) -> Result(Nil, String) {
+) -> Result(Nil, OpenSearchError) {
   create_books_index(opensearch, index_name)
   |> result.try_recover(accept_existing)
 }
 
-fn accept_existing(body: String) -> Result(Nil, String) {
+fn accept_existing(error: OpenSearchError) -> Result(Nil, OpenSearchError) {
+  case error {
+    Rejected(status: 400, body:) -> accept_existing_body(error, body)
+    _ -> Error(error)
+  }
+}
+
+fn accept_existing_body(
+  error: OpenSearchError,
+  body: String,
+) -> Result(Nil, OpenSearchError) {
   case json.parse(body, decode.at(["error", "type"], decode.string)) {
     Ok("resource_already_exists_exception") -> Ok(Nil)
-    _ -> Error(body)
+    _ -> Error(error)
   }
 }
 ```
 
 `ensure_books_index(opensearch, "books")` returns `Ok(Nil)` when it creates the index, and `Ok(Nil)` when the index already exists. Any other error stays an error. For example, a name in upper case gets status 400 with `invalid_index_name_exception`, and `ensure_books_index(opensearch, "Books")` returns that body as the error:
 
-### The answer to an upper-case name <a href="https://github.com/TrustBound/dream_opensearch/blob/3.0.0/test/outputs/guide_managing_indexes_invalid_name.txt"><img align="right" alt="Tested snippet" src="https://img.shields.io/badge/%F0%9F%A7%AA_tested-snippet-lightgreen.svg?style=flat-square"></a>
+### The answer to an upper-case name <a href="https://github.com/TrustBound/dream_opensearch/blob/4.0.0/test/outputs/guide_managing_indexes_invalid_name.txt"><img align="right" alt="Tested snippet" src="https://img.shields.io/badge/%F0%9F%A7%AA_tested-snippet-lightgreen.svg?style=flat-square"></a>
 
 ```text
 {"error":{"root_cause":[{"type":"invalid_index_name_exception","reason":"Invalid index name [Books], must be lowercase","index":"Books","index_uuid":"_na_"}],"type":"invalid_index_name_exception","reason":"Invalid index name [Books], must be lowercase","index":"Books","index_uuid":"_na_"},"status":400}
 ```
 
-It reads the error type from the body, not the status. Status 400 also means a bad mapping or a bad name, and those must not pass as "already exists".
+`accept_existing` takes only a `Rejected` error with status 400, and then reads the error type from its body. The status alone is not enough. Status 400 also means a bad mapping or a bad name, and those must not pass as "already exists". Any other error, such as `Unavailable`, stays the error.
 
 Why not check first, and create only when the index is missing? Because two copies of your program can start at the same time. Both check, both see no index, and one of the two creates fails anyway. Create and accept "already exists" is safe in that case too.
 
@@ -172,10 +182,10 @@ Why not check first, and create only when the index is missing? Because two copi
 
 The `document` module covers creating and deleting an index. For the other index APIs, use `client.send_request`, which sends any method, path and body to the cluster with your base URL and credentials. This is a second module, `index_tools`, with three of them:
 
-### Check, refresh and count an index <a href="https://github.com/TrustBound/dream_opensearch/blob/3.0.0/test/snippets/guide_managing_indexes_maintain.gleam#L6-L58"><img align="right" alt="Tested snippet" src="https://img.shields.io/badge/%F0%9F%A7%AA_tested-snippet-lightgreen.svg?style=flat-square"></a>
+### Check, refresh and count an index <a href="https://github.com/TrustBound/dream_opensearch/blob/4.0.0/test/snippets/guide_managing_indexes_maintain.gleam#L6-L55"><img align="right" alt="Tested snippet" src="https://img.shields.io/badge/%F0%9F%A7%AA_tested-snippet-lightgreen.svg?style=flat-square"></a>
 
 ```gleam
-import dream_opensearch/client.{type Client}
+import dream_opensearch/client.{type Client, type OpenSearchError, Rejected}
 import dream_opensearch/document
 import gleam/dynamic/decode
 import gleam/http
@@ -186,17 +196,11 @@ import gleam/result
 pub fn index_exists(
   opensearch: Client,
   index_name: String,
-) -> Result(Bool, String) {
+) -> Result(Bool, OpenSearchError) {
   case client.send_request(opensearch, http.Get, "/" <> index_name, "") {
     Ok(_) -> Ok(True)
-    Error(body) -> accept_not_found(body)
-  }
-}
-
-fn accept_not_found(body: String) -> Result(Bool, String) {
-  case json.parse(body, decode.at(["error", "type"], decode.string)) {
-    Ok("index_not_found_exception") -> Ok(False)
-    _ -> Error(body)
+    Error(Rejected(status: 404, ..)) -> Ok(False)
+    Error(error) -> Error(error)
   }
 }
 
@@ -204,7 +208,7 @@ fn accept_not_found(body: String) -> Result(Bool, String) {
 pub fn refresh_index(
   opensearch: Client,
   index_name: String,
-) -> Result(Nil, String) {
+) -> Result(Nil, OpenSearchError) {
   client.send_request(
     opensearch,
     http.Post,
@@ -219,12 +223,15 @@ pub fn count_documents(
   opensearch: Client,
   index_name: String,
 ) -> Result(Int, String) {
-  use body <- result.try(client.send_request(
-    opensearch,
-    http.Get,
-    "/" <> index_name <> "/_count",
-    "",
-  ))
+  use body <- result.try(
+    client.send_request(
+      opensearch,
+      http.Get,
+      "/" <> index_name <> "/_count",
+      "",
+    )
+    |> result.map_error(client.describe_error),
+  )
   json.parse(body, decode.at(["count"], decode.int))
   |> result.replace_error("Unexpected count response: " <> body)
 }
@@ -234,21 +241,21 @@ Here is what each function sends, and what it returns:
 
 | Function | Request | Returns |
 |:---|:---|:---|
-| `index_exists(opensearch, "books")` | `GET /books` | `Ok(True)` for status 200, `Ok(False)` for a 404 with `index_not_found_exception` |
+| `index_exists(opensearch, "books")` | `GET /books` | `Ok(True)` for status 200, `Ok(False)` for `Rejected` with status 404 |
 | `refresh_index(opensearch, "books")` | `POST /books/_refresh` | `Ok(Nil)` |
 | `count_documents(opensearch, "books")` | `GET /books/_count` | `Ok(2)` for the body `{"count":2,"_shards":{"total":1,"successful":1,"skipped":0,"failed":0}}` |
 
-`index_exists` sends a GET for the index, and reads the error type of a 404, as `ensure_books_index` does. Why not a HEAD request, which gets only a status? Because a HEAD answer has no body, so every error status comes back as `Error("")`, an empty string. A HEAD for a missing index gives `Error("")`, and so does a HEAD with a wrong password on a secured cluster: the 401 has no body either. With a GET, a wrong password stays `Error("Unauthorized")`, and a refused connection stays `Error("Connection failed: Connection refused")`. A missing index is not the same as a cluster you cannot reach, and your program must not treat them the same.
+`index_exists` sends a GET for the index, and matches `Rejected(status: 404, ..)`. A GET for an index answers 404 only when the index does not exist, so the status is enough here. Why not a HEAD request, which gets only a status? A HEAD answer has no body, so a wrong password on a secured cluster gives `Rejected(status: 401, body: "")`, with nothing in it to say why. With a GET, a wrong password gives `Rejected(status: 401, body: "Unauthorized")`, and a refused connection gives `Unavailable("Connection failed: Connection refused")`. Both stay errors. A missing index is not the same as a cluster you cannot reach, and your program must not treat them the same.
 
 `refresh_index` makes the documents indexed so far visible to search. By default OpenSearch refreshes each index about once a second, so you need this only when you search right after a write, as in tests and scripts.
 
-`count_documents` reads the `count` field. Count after a refresh, or the count can miss the newest documents. When the body has no `count`, it returns `Error("Unexpected count response: <the body>")`.
+`count_documents` reads the `count` field. Count after a refresh, or the count can miss the newest documents. `count_documents` and `copy_index` return `Result(Int, String)`, because they also read the body. A failed request becomes the text of `client.describe_error`, and a body with no `count` returns `Error("Unexpected count response: <the body>")`.
 
 ## Step 4: Change a mapping by copying to a new index
 
 You cannot change the type of a field in an existing index. To change a mapping, create a new index with the new mapping, and copy the documents into it with the reindex API. Add this to `index_tools`:
 
-### Copy every document into another index <a href="https://github.com/TrustBound/dream_opensearch/blob/3.0.0/test/snippets/guide_managing_indexes_maintain.gleam#L60-L81"><img align="right" alt="Tested snippet" src="https://img.shields.io/badge/%F0%9F%A7%AA_tested-snippet-lightgreen.svg?style=flat-square"></a>
+### Copy every document into another index <a href="https://github.com/TrustBound/dream_opensearch/blob/4.0.0/test/snippets/guide_managing_indexes_maintain.gleam#L57-L76"><img align="right" alt="Tested snippet" src="https://img.shields.io/badge/%F0%9F%A7%AA_tested-snippet-lightgreen.svg?style=flat-square"></a>
 
 ```gleam
 /// Copies every document of `source` into `destination`. Returns how many
@@ -264,12 +271,10 @@ pub fn copy_index(
       #("dest", json.object([#("index", json.string(destination))])),
     ])
     |> json.to_string
-  use response <- result.try(client.send_request(
-    opensearch,
-    http.Post,
-    "/_reindex",
-    body,
-  ))
+  use response <- result.try(
+    client.send_request(opensearch, http.Post, "/_reindex", body)
+    |> result.map_error(client.describe_error),
+  )
   json.parse(response, decode.at(["created"], decode.int))
   |> result.replace_error("Unexpected reindex response: " <> response)
 }
@@ -277,7 +282,7 @@ pub fn copy_index(
 
 `copy_index(opensearch, "books_v1", "books_v2")` sends:
 
-### The request of copy_index <a href="https://github.com/TrustBound/dream_opensearch/blob/3.0.0/test/outputs/guide_managing_indexes_reindex_request.txt"><img align="right" alt="Tested snippet" src="https://img.shields.io/badge/%F0%9F%A7%AA_tested-snippet-lightgreen.svg?style=flat-square"></a>
+### The request of copy_index <a href="https://github.com/TrustBound/dream_opensearch/blob/4.0.0/test/outputs/guide_managing_indexes_reindex_request.txt"><img align="right" alt="Tested snippet" src="https://img.shields.io/badge/%F0%9F%A7%AA_tested-snippet-lightgreen.svg?style=flat-square"></a>
 
 ```text
 POST /_reindex
@@ -286,7 +291,7 @@ POST /_reindex
 
 OpenSearch copies the documents and answers when it is done:
 
-### The answer to the reindex <a href="https://github.com/TrustBound/dream_opensearch/blob/3.0.0/test/outputs/guide_managing_indexes_reindex_response.txt"><img align="right" alt="Tested snippet" src="https://img.shields.io/badge/%F0%9F%A7%AA_tested-snippet-lightgreen.svg?style=flat-square"></a>
+### The answer to the reindex <a href="https://github.com/TrustBound/dream_opensearch/blob/4.0.0/test/outputs/guide_managing_indexes_reindex_response.txt"><img align="right" alt="Tested snippet" src="https://img.shields.io/badge/%F0%9F%A7%AA_tested-snippet-lightgreen.svg?style=flat-square"></a>
 
 ```text
 {"took":59,"timed_out":false,"total":2,"updated":0,"created":2,"deleted":0,"batches":1,"version_conflicts":0,"noops":0,"retries":{"bulk":0,"search":0},"throttled_millis":0,"requests_per_second":-1.0,"throttled_until_millis":0,"failures":[]}
@@ -299,13 +304,13 @@ This body is from a copy of an index with two books, so the function returns `Ok
 3. Point your program at `books_v2`.
 4. `delete_index_if_present(opensearch, "books_v1")`, from Step 5, when you are sure.
 
-The reindex request waits until the copy is done, and a large index takes a long time. The client waits 30 seconds for an answer (the default of `dream_http_client`), so a copy that takes longer returns `Error("Timed out after 30000ms")`, while OpenSearch goes on with the copy. A copy from an index that does not exist gets status 404 with `index_not_found_exception`. Count the documents of the new index to see when it is done. To switch your program from one index to another with no change to your code, put an alias in front of the indexes, with `client.send_request` and the `_aliases` API.
+The reindex request waits until the copy is done, and a large index takes a long time. The client waits 30 seconds for an answer (the default of `dream_http_client`), so a copy that takes longer returns the text of `TimedOut(timeout_ms: 30000)`, while OpenSearch goes on with the copy. For a longer wait, make a client with a timeout of its own, as [Handling errors](https://github.com/TrustBound/dream_opensearch/blob/main/docs/guides/handling-errors.md#step-5-set-the-timeout) shows. A copy from an index that does not exist gets status 404 with `index_not_found_exception`. Count the documents of the new index to see when it is done. To switch your program from one index to another with no change to your code, put an alias in front of the indexes, with `client.send_request` and the `_aliases` API.
 
 ## Step 5: Delete an index
 
 `document.delete_index` deletes an index and every document in it, at once, with no way to undo it. A clean-up script usually wants to accept an index that is already gone. Add this to `index_tools`:
 
-### Delete an index if it is there <a href="https://github.com/TrustBound/dream_opensearch/blob/3.0.0/test/snippets/guide_managing_indexes_maintain.gleam#L83-L99"><img align="right" alt="Tested snippet" src="https://img.shields.io/badge/%F0%9F%A7%AA_tested-snippet-lightgreen.svg?style=flat-square"></a>
+### Delete an index if it is there <a href="https://github.com/TrustBound/dream_opensearch/blob/4.0.0/test/snippets/guide_managing_indexes_maintain.gleam#L78-L89"><img align="right" alt="Tested snippet" src="https://img.shields.io/badge/%F0%9F%A7%AA_tested-snippet-lightgreen.svg?style=flat-square"></a>
 
 ```gleam
 /// Deletes the index `index_name`. An index that is not there is not an
@@ -313,21 +318,16 @@ The reindex request waits until the copy is done, and a large index takes a long
 pub fn delete_index_if_present(
   opensearch: Client,
   index_name: String,
-) -> Result(Nil, String) {
-  document.delete_index(opensearch, index_name)
-  |> result.replace(Nil)
-  |> result.try_recover(accept_missing)
-}
-
-fn accept_missing(body: String) -> Result(Nil, String) {
-  case json.parse(body, decode.at(["error", "type"], decode.string)) {
-    Ok("index_not_found_exception") -> Ok(Nil)
-    _ -> Error(body)
+) -> Result(Nil, OpenSearchError) {
+  case document.delete_index(opensearch, index_name) {
+    Ok(_) -> Ok(Nil)
+    Error(Rejected(status: 404, ..)) -> Ok(Nil)
+    Error(error) -> Error(error)
   }
 }
 ```
 
-`delete_index_if_present(opensearch, "books_v1")` sends `DELETE /books_v1`, and OpenSearch answers `{"acknowledged":true}`. For an index that does not exist, OpenSearch answers with status 404 and an `index_not_found_exception` body, and the function returns `Ok(Nil)`. Every other error stays an error. On a secured cluster, a user without the right to delete gets status 403 and a `security_exception` body, such as `no permissions for [indices:admin/delete] and User [name=probe_reader, backend_roles=[], requestedTenant=null]`.
+`delete_index_if_present(opensearch, "books_v1")` sends `DELETE /books_v1`, and OpenSearch answers `{"acknowledged":true}`. For an index that does not exist, OpenSearch answers with status 404 and an `index_not_found_exception` body. The function matches that `Rejected` error with status 404, and returns `Ok(Nil)`. Every other error stays an error. On a secured cluster, a user without the right to delete gets status 403 and a `security_exception` body, such as `no permissions for [indices:admin/delete] and User [name=probe_reader, backend_roles=[], requestedTenant=null]`.
 
 To delete one document instead of the whole index, use `document.delete`, which [Getting started](https://github.com/TrustBound/dream_opensearch/blob/main/docs/guides/getting-started.md#step-4-delete-a-document) shows.
 
@@ -344,7 +344,7 @@ To delete one document instead of the whole index, use `document.delete`, which 
 
 ## When index operations fail
 
-Every function returns `Error(String)`. For an answer from OpenSearch, the string is the response body, and the error type in it tells you what went wrong:
+Every `document` function returns `Error(OpenSearchError)`. For an answer from OpenSearch, the error is `Rejected(status, body)`, and the error type in the body tells you what went wrong:
 
 | What happened | Status | Error type in the body |
 |:---|:---|:---|
@@ -355,9 +355,9 @@ Every function returns `Error(String)`. For an answer from OpenSearch, the strin
 | A user without the needed rights | 403 | `security_exception` |
 | Change the type of a mapped field | 400 | `illegal_argument_exception` |
 | A field that a strict mapping does not name | 400 | `strict_dynamic_mapping_exception` |
-| HEAD for a missing index, or with a wrong password | 404 or 401 | No body: the error is `""` |
+| HEAD for a missing index, or with a wrong password | 404 or 401 | No body: the body of the error is `""` |
 
-The error type is at `error.type` in the JSON. [Handling errors](https://github.com/TrustBound/dream_opensearch/blob/main/docs/guides/handling-errors.md) shows how to read it into a typed error for all of your code, not only for index setup.
+The error type is at `error.type` in the JSON. [Handling errors](https://github.com/TrustBound/dream_opensearch/blob/main/docs/guides/handling-errors.md) shows how to read it for all of your code, not only for index setup.
 
 ## Test your code
 
@@ -370,7 +370,7 @@ The setup code also has a part you can test as a plain value, the index body, an
 
 Add `dream_test` as a dev dependency, with the version range that this package tests with:
 
-### The dev dependency on dream_test <a href="https://github.com/TrustBound/dream_opensearch/blob/3.0.0/gleam.toml#L26-L27"><img align="right" alt="Tested snippet" src="https://img.shields.io/badge/%F0%9F%A7%AA_tested-snippet-lightgreen.svg?style=flat-square"></a>
+### The dev dependency on dream_test <a href="https://github.com/TrustBound/dream_opensearch/blob/4.0.0/gleam.toml#L27-L28"><img align="right" alt="Tested snippet" src="https://img.shields.io/badge/%F0%9F%A7%AA_tested-snippet-lightgreen.svg?style=flat-square"></a>
 
 ```toml
 [dev-dependencies]
@@ -379,10 +379,10 @@ dream_test = ">= 3.0.0 and < 4.0.0"
 
 Here is a test module for both:
 
-### Test the index body and the setup error path <a href="https://github.com/TrustBound/dream_opensearch/blob/3.0.0/test/snippets/guide_managing_indexes_testing.gleam#L6-L46"><img align="right" alt="Tested snippet" src="https://img.shields.io/badge/%F0%9F%A7%AA_tested-snippet-lightgreen.svg?style=flat-square"></a>
+### Test the index body and the setup error path <a href="https://github.com/TrustBound/dream_opensearch/blob/4.0.0/test/snippets/guide_managing_indexes_testing.gleam#L6-L46"><img align="right" alt="Tested snippet" src="https://img.shields.io/badge/%F0%9F%A7%AA_tested-snippet-lightgreen.svg?style=flat-square"></a>
 
 ```gleam
-import dream_opensearch/client
+import dream_opensearch/client.{Unavailable}
 import dream_test/matchers.{be_equal, or_fail_with, should}
 import dream_test/suite.{type TestSuite}
 import dream_test/unit.{describe, it}
@@ -410,7 +410,7 @@ pub fn tests() -> TestSuite {
     }),
     it("returns the connection error when no cluster listens", fn() {
       // Arrange
-      let opensearch = client.new("http://127.0.0.1:1")
+      let assert Ok(opensearch) = client.new("http://127.0.0.1:1")
 
       // Act
       let created = ensure_books_index(opensearch, "books")
@@ -418,7 +418,7 @@ pub fn tests() -> TestSuite {
       // Assert
       created
       |> should
-      |> be_equal(Error("Connection failed: Connection refused"))
+      |> be_equal(Error(Unavailable("Connection failed: Connection refused")))
       |> or_fail_with("Expected a refused connection")
     }),
   ])
@@ -433,7 +433,7 @@ To run your setup against a real cluster in a test, give each test run its own i
 
 **Writing before the index exists.** *Symptom:* searches on `author` with `term` find nothing, and `count_documents` says the documents are there. *Fix:* the first write created the index with guessed types, and `author` became a `text` field. Create the index with your mapping before the first write, with `ensure_books_index` at the start of your program.
 
-**A missing index read as a cluster problem, or the other way around.** *Symptom:* your program creates an index when the cluster is down, or reports a cluster failure for a missing index. *Fix:* tell the cases apart. A HEAD for a missing index gives `Error("")`. A connection failure gives a message that starts with `Connection failed:`.
+**A missing index read as a cluster problem, or the other way around.** *Symptom:* your program creates an index when the cluster is down, or reports a cluster failure for a missing index. *Fix:* tell the cases apart by the variant. A missing index gives `Rejected` with status 404. A cluster you cannot reach gives `Unavailable` or `TimedOut`.
 
 **Index names in upper case.** *Symptom:* `invalid_index_name_exception`. *Fix:* use lower case. Avoid spaces and the characters `#`, `?`, `/` and `*` too. The `document` functions percent-encode the name, so OpenSearch gets the whole name and names the problem in the error. `client.send_request` does not encode its path, so the functions of Step 3 need names that need no encoding.
 

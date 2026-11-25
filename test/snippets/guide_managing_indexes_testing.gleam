@@ -3,7 +3,7 @@
 //// Tests the index body with no cluster, and the setup code against a
 //// cluster that cannot be reached.
 
-import dream_opensearch/client
+import dream_opensearch/client.{Unavailable}
 import dream_test/matchers.{be_equal, or_fail_with, should}
 import dream_test/suite.{type TestSuite}
 import dream_test/unit.{describe, it}
@@ -31,7 +31,7 @@ pub fn tests() -> TestSuite {
     }),
     it("returns the connection error when no cluster listens", fn() {
       // Arrange
-      let opensearch = client.new("http://127.0.0.1:1")
+      let assert Ok(opensearch) = client.new("http://127.0.0.1:1")
 
       // Act
       let created = ensure_books_index(opensearch, "books")
@@ -39,7 +39,7 @@ pub fn tests() -> TestSuite {
       // Assert
       created
       |> should
-      |> be_equal(Error("Connection failed: Connection refused"))
+      |> be_equal(Error(Unavailable("Connection failed: Connection refused")))
       |> or_fail_with("Expected a refused connection")
     }),
   ])
