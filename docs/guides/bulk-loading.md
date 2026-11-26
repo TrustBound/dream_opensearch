@@ -49,7 +49,7 @@ A bulk body is NDJSON: newline-delimited JSON. Each line is one complete JSON ob
 
 Build the body from your values, never by hand. This is the start of a `book_loader` module:
 
-### Build the bulk body for a list of books <a href="https://github.com/TrustBound/dream_opensearch/blob/4.0.0/test/snippets/guide_bulk_loading_books.gleam#L6-L50"><img align="right" alt="Tested snippet" src="https://img.shields.io/badge/%F0%9F%A7%AA_tested-snippet-lightgreen.svg?style=flat-square"></a>
+### Build the bulk body for a list of books <a href="https://github.com/TrustBound/dream_opensearch/blob/4.1.0/test/snippets/guide_bulk_loading_books.gleam#L6-L50"><img align="right" alt="Tested snippet" src="https://img.shields.io/badge/%F0%9F%A7%AA_tested-snippet-lightgreen.svg?style=flat-square"></a>
 
 ```gleam
 import dream_opensearch/client.{type Client}
@@ -103,7 +103,7 @@ The import list holds what all the steps of this guide need, so you can add the 
 
 `json.to_string` writes each object on one line, with no line breaks inside it, which is what NDJSON needs. `bulk_body` puts a newline after every line, the last one too. For the index `books` and two books it returns:
 
-### The bulk body of two books <a href="https://github.com/TrustBound/dream_opensearch/blob/4.0.0/test/outputs/guide_bulk_loading_bulk_body.txt"><img align="right" alt="Tested snippet" src="https://img.shields.io/badge/%F0%9F%A7%AA_tested-snippet-lightgreen.svg?style=flat-square"></a>
+### The bulk body of two books <a href="https://github.com/TrustBound/dream_opensearch/blob/4.1.0/test/outputs/guide_bulk_loading_bulk_body.txt"><img align="right" alt="Tested snippet" src="https://img.shields.io/badge/%F0%9F%A7%AA_tested-snippet-lightgreen.svg?style=flat-square"></a>
 
 ```text
 {"index":{"_index":"books","_id":"1"}}
@@ -118,7 +118,7 @@ The action line names the index, so one bulk request can write to several indexe
 
 `document.bulk` sends the body to `POST /_bulk`. Add this to the module:
 
-### Load a list of books in one request <a href="https://github.com/TrustBound/dream_opensearch/blob/4.0.0/test/snippets/guide_bulk_loading_books.gleam#L52-L63"><img align="right" alt="Tested snippet" src="https://img.shields.io/badge/%F0%9F%A7%AA_tested-snippet-lightgreen.svg?style=flat-square"></a>
+### Load a list of books in one request <a href="https://github.com/TrustBound/dream_opensearch/blob/4.1.0/test/snippets/guide_bulk_loading_books.gleam#L52-L63"><img align="right" alt="Tested snippet" src="https://img.shields.io/badge/%F0%9F%A7%AA_tested-snippet-lightgreen.svg?style=flat-square"></a>
 
 ```gleam
 /// Loads `books` in one bulk request. Returns the books that failed.
@@ -137,7 +137,7 @@ pub fn load_books(
 
 `load_books(opensearch, "books", books)` sends the body of Step 1. When every document is stored, OpenSearch answers with status 200 and one item for each document, in the order of the body:
 
-### The answer when every book is stored <a href="https://github.com/TrustBound/dream_opensearch/blob/4.0.0/test/outputs/guide_bulk_loading_all_stored.txt"><img align="right" alt="Tested snippet" src="https://img.shields.io/badge/%F0%9F%A7%AA_tested-snippet-lightgreen.svg?style=flat-square"></a>
+### The answer when every book is stored <a href="https://github.com/TrustBound/dream_opensearch/blob/4.1.0/test/outputs/guide_bulk_loading_all_stored.txt"><img align="right" alt="Tested snippet" src="https://img.shields.io/badge/%F0%9F%A7%AA_tested-snippet-lightgreen.svg?style=flat-square"></a>
 
 ```text
 {"took":4,"errors":false,"items":[{"index":{"_index":"books","_id":"1","_version":1,"result":"created","_shards":{"total":2,"successful":1,"failed":0},"_seq_no":0,"_primary_term":1,"status":201}},{"index":{"_index":"books","_id":"2","_version":1,"result":"created","_shards":{"total":2,"successful":1,"failed":0},"_seq_no":1,"_primary_term":1,"status":201}}]}
@@ -149,7 +149,7 @@ pub fn load_books(
 
 Here is the catch. When some documents fail and others succeed, OpenSearch still answers the bulk request with status 200. So `document.bulk` returns `Ok`, and the failures are inside the body. This response is for three books in the `books` index with the strict mapping. Books 1 and 2 were stored. Book 3 has a `year` of 3000000000, which does not fit an `integer`:
 
-### The answer when one book fails <a href="https://github.com/TrustBound/dream_opensearch/blob/4.0.0/test/outputs/guide_bulk_loading_one_failed.txt"><img align="right" alt="Tested snippet" src="https://img.shields.io/badge/%F0%9F%A7%AA_tested-snippet-lightgreen.svg?style=flat-square"></a>
+### The answer when one book fails <a href="https://github.com/TrustBound/dream_opensearch/blob/4.1.0/test/outputs/guide_bulk_loading_one_failed.txt"><img align="right" alt="Tested snippet" src="https://img.shields.io/badge/%F0%9F%A7%AA_tested-snippet-lightgreen.svg?style=flat-square"></a>
 
 ```text
 {"took":3,"errors":true,"items":[{"index":{"_index":"books","_id":"1","_version":1,"result":"created","_shards":{"total":2,"successful":1,"failed":0},"_seq_no":0,"_primary_term":1,"status":201}},{"index":{"_index":"books","_id":"2","_version":1,"result":"created","_shards":{"total":2,"successful":1,"failed":0},"_seq_no":1,"_primary_term":1,"status":201}},{"index":{"_index":"books","_id":"3","status":400,"error":{"type":"mapper_parsing_exception","reason":"failed to parse field [year] of type [integer] in document with id '3'. Preview of field's value: '3000000000'","caused_by":{"type":"input_coercion_exception","reason":"Numeric value (3000000000) out of range of int (-2147483648 - 2147483647)\n at [Source: REDACTED (`StreamReadFeature.INCLUDE_SOURCE_IN_LOCATION` disabled); line: 1, column: 70]"}}}}]}
@@ -157,7 +157,7 @@ Here is the catch. When some documents fail and others succeed, OpenSearch still
 
 `errors` is `true`, and the failed items have an `error` object. Add this reader to the module. `load_books` from Step 2 already calls it:
 
-### Read the failed items from a bulk response <a href="https://github.com/TrustBound/dream_opensearch/blob/4.0.0/test/snippets/guide_bulk_loading_books.gleam#L65-L101"><img align="right" alt="Tested snippet" src="https://img.shields.io/badge/%F0%9F%A7%AA_tested-snippet-lightgreen.svg?style=flat-square"></a>
+### Read the failed items from a bulk response <a href="https://github.com/TrustBound/dream_opensearch/blob/4.1.0/test/snippets/guide_bulk_loading_books.gleam#L65-L101"><img align="right" alt="Tested snippet" src="https://img.shields.io/badge/%F0%9F%A7%AA_tested-snippet-lightgreen.svg?style=flat-square"></a>
 
 ```gleam
 /// Reads the failed items out of the body of a bulk response.
@@ -201,7 +201,7 @@ fn error_decoder() -> decode.Decoder(#(String, String)) {
 
 `failed_items` reads every item, keeps the ones with an `error`, and drops the rest. It ignores the fields it does not need, such as `caused_by`. For the response above, `load_books` returns:
 
-### The failed items that load_books returns <a href="https://github.com/TrustBound/dream_opensearch/blob/4.0.0/test/outputs/guide_bulk_loading_failed_items.txt"><img align="right" alt="Tested snippet" src="https://img.shields.io/badge/%F0%9F%A7%AA_tested-snippet-lightgreen.svg?style=flat-square"></a>
+### The failed items that load_books returns <a href="https://github.com/TrustBound/dream_opensearch/blob/4.1.0/test/outputs/guide_bulk_loading_failed_items.txt"><img align="right" alt="Tested snippet" src="https://img.shields.io/badge/%F0%9F%A7%AA_tested-snippet-lightgreen.svg?style=flat-square"></a>
 
 ```text
 Ok([FailedItem(id: "3", status: 400, error_type: "mapper_parsing_exception", reason: "failed to parse field [year] of type [integer] in document with id '3'. Preview of field's value: '3000000000'")])
@@ -220,7 +220,7 @@ Always read the items. Do not stop at `Ok`, and do not trust `errors` alone eith
 
 One huge bulk request is slow to build, heavy on memory, and can hit the request size limit of the cluster. Send the list in batches instead. Add this to the module:
 
-### Load books in batches <a href="https://github.com/TrustBound/dream_opensearch/blob/4.0.0/test/snippets/guide_bulk_loading_books.gleam#L103-L117"><img align="right" alt="Tested snippet" src="https://img.shields.io/badge/%F0%9F%A7%AA_tested-snippet-lightgreen.svg?style=flat-square"></a>
+### Load books in batches <a href="https://github.com/TrustBound/dream_opensearch/blob/4.1.0/test/snippets/guide_bulk_loading_books.gleam#L103-L117"><img align="right" alt="Tested snippet" src="https://img.shields.io/badge/%F0%9F%A7%AA_tested-snippet-lightgreen.svg?style=flat-square"></a>
 
 ```gleam
 /// Loads `books` with one bulk request for each `batch_size` books. Stops at
@@ -250,7 +250,7 @@ A good batch size depends on the size of your documents. Start with about 5 to 1
 
 A status 429 means "too many requests". The cluster rejected the document because its queues were full, not because the document is wrong. Those documents are worth one more try. Add this to the module:
 
-### Retry the books that the cluster rejected <a href="https://github.com/TrustBound/dream_opensearch/blob/4.0.0/test/snippets/guide_bulk_loading_books.gleam#L119-L137"><img align="right" alt="Tested snippet" src="https://img.shields.io/badge/%F0%9F%A7%AA_tested-snippet-lightgreen.svg?style=flat-square"></a>
+### Retry the books that the cluster rejected <a href="https://github.com/TrustBound/dream_opensearch/blob/4.1.0/test/snippets/guide_bulk_loading_books.gleam#L119-L137"><img align="right" alt="Tested snippet" src="https://img.shields.io/badge/%F0%9F%A7%AA_tested-snippet-lightgreen.svg?style=flat-square"></a>
 
 ```gleam
 /// Loads once more the books that OpenSearch rejected with status 429
@@ -278,7 +278,7 @@ pub fn retry_rejected(
 
 Say a busy cluster also rejected book 2 of Step 3, so `failed` holds a 429 item for book 2 and the 400 item for book 3. Then `retry_rejected(opensearch, "books", books, failed)` sends a bulk request with only book 2. When that one is stored, the function returns:
 
-### The failures left after the retry <a href="https://github.com/TrustBound/dream_opensearch/blob/4.0.0/test/outputs/guide_bulk_loading_retry_result.txt"><img align="right" alt="Tested snippet" src="https://img.shields.io/badge/%F0%9F%A7%AA_tested-snippet-lightgreen.svg?style=flat-square"></a>
+### The failures left after the retry <a href="https://github.com/TrustBound/dream_opensearch/blob/4.1.0/test/outputs/guide_bulk_loading_retry_result.txt"><img align="right" alt="Tested snippet" src="https://img.shields.io/badge/%F0%9F%A7%AA_tested-snippet-lightgreen.svg?style=flat-square"></a>
 
 ```text
 Ok([FailedItem(id: "3", status: 400, error_type: "mapper_parsing_exception", reason: "failed to parse field [year] of type [integer] in document with id '3'. Preview of field's value: '3000000000'")])
@@ -312,7 +312,7 @@ Some problems fail the whole request, not single items. Then OpenSearch answers 
 
 The most common one is a body that does not end with a newline. `bulk_body` always ends with one, but a body you build by hand might not. OpenSearch answers with status 400 and this body:
 
-### The answer to a body with no final newline <a href="https://github.com/TrustBound/dream_opensearch/blob/4.0.0/test/outputs/guide_bulk_loading_no_final_newline.txt"><img align="right" alt="Tested snippet" src="https://img.shields.io/badge/%F0%9F%A7%AA_tested-snippet-lightgreen.svg?style=flat-square"></a>
+### The answer to a body with no final newline <a href="https://github.com/TrustBound/dream_opensearch/blob/4.1.0/test/outputs/guide_bulk_loading_no_final_newline.txt"><img align="right" alt="Tested snippet" src="https://img.shields.io/badge/%F0%9F%A7%AA_tested-snippet-lightgreen.svg?style=flat-square"></a>
 
 ```text
 {"error":{"root_cause":[{"type":"illegal_argument_exception","reason":"The bulk request must be terminated by a newline [\\n]"}],"type":"illegal_argument_exception","reason":"The bulk request must be terminated by a newline [\\n]"},"status":400}
@@ -331,7 +331,7 @@ The two parts of the loader that are easy to get wrong are the body and the read
 
 Add `dream_test` as a dev dependency, with the version range that this package tests with:
 
-### The dev dependency on dream_test <a href="https://github.com/TrustBound/dream_opensearch/blob/4.0.0/gleam.toml#L27-L28"><img align="right" alt="Tested snippet" src="https://img.shields.io/badge/%F0%9F%A7%AA_tested-snippet-lightgreen.svg?style=flat-square"></a>
+### The dev dependency on dream_test <a href="https://github.com/TrustBound/dream_opensearch/blob/4.1.0/gleam.toml#L28-L29"><img align="right" alt="Tested snippet" src="https://img.shields.io/badge/%F0%9F%A7%AA_tested-snippet-lightgreen.svg?style=flat-square"></a>
 
 ```toml
 [dev-dependencies]
@@ -340,7 +340,7 @@ dream_test = ">= 3.0.0 and < 4.0.0"
 
 Here is a test module for both parts:
 
-### Test the bulk body and the failed items <a href="https://github.com/TrustBound/dream_opensearch/blob/4.0.0/test/snippets/guide_bulk_loading_testing.gleam#L5-L48"><img align="right" alt="Tested snippet" src="https://img.shields.io/badge/%F0%9F%A7%AA_tested-snippet-lightgreen.svg?style=flat-square"></a>
+### Test the bulk body and the failed items <a href="https://github.com/TrustBound/dream_opensearch/blob/4.1.0/test/snippets/guide_bulk_loading_testing.gleam#L5-L48"><img align="right" alt="Tested snippet" src="https://img.shields.io/badge/%F0%9F%A7%AA_tested-snippet-lightgreen.svg?style=flat-square"></a>
 
 ```gleam
 import dream_test/matchers.{be_equal, or_fail_with, should}

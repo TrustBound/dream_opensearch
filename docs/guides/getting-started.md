@@ -43,7 +43,7 @@ You also need a cluster. The examples use a cluster on `http://localhost:9200`, 
 
 The quickest cluster for development is OpenSearch in Docker. This is the service that the tests of dream_opensearch run against, from the `docker-compose.yml` of the package:
 
-### The OpenSearch service of the tests <a href="https://github.com/TrustBound/dream_opensearch/blob/4.0.0/docker-compose.yml#L16-L33"><img align="right" alt="Tested snippet" src="https://img.shields.io/badge/%F0%9F%A7%AA_tested-snippet-lightgreen.svg?style=flat-square"></a>
+### The OpenSearch service of the tests <a href="https://github.com/TrustBound/dream_opensearch/blob/4.1.0/docker-compose.yml#L16-L33"><img align="right" alt="Tested snippet" src="https://img.shields.io/badge/%F0%9F%A7%AA_tested-snippet-lightgreen.svg?style=flat-square"></a>
 
 ```yaml
 services:
@@ -68,7 +68,7 @@ services:
 
 Put it in a `docker-compose.yml` file and start it. `--wait` returns when the health check passes, which took about 15 seconds on our machine:
 
-### Start the cluster <a href="https://github.com/TrustBound/dream_opensearch/blob/4.0.0/scripts/search-up.sh#L9"><img align="right" alt="Tested snippet" src="https://img.shields.io/badge/%F0%9F%A7%AA_tested-snippet-lightgreen.svg?style=flat-square"></a>
+### Start the cluster <a href="https://github.com/TrustBound/dream_opensearch/blob/4.1.0/scripts/search-up.sh#L9"><img align="right" alt="Tested snippet" src="https://img.shields.io/badge/%F0%9F%A7%AA_tested-snippet-lightgreen.svg?style=flat-square"></a>
 
 ```sh
 docker compose up -d --wait opensearch
@@ -82,7 +82,7 @@ Every example in this guide is tested against OpenSearch 2.19.1, in this Docker 
 
 Here is the smallest useful program. It creates a client, then indexes, searches for and deletes one user:
 
-### Index, search and delete a document <a href="https://github.com/TrustBound/dream_opensearch/blob/4.0.0/test/snippets/readme_quick_start.gleam#L5-L34"><img align="right" alt="Tested snippet" src="https://img.shields.io/badge/%F0%9F%A7%AA_tested-snippet-lightgreen.svg?style=flat-square"></a>
+### Index, search and delete a document <a href="https://github.com/TrustBound/dream_opensearch/blob/4.1.0/test/snippets/readme_quick_start.gleam#L5-L34"><img align="right" alt="Tested snippet" src="https://img.shields.io/badge/%F0%9F%A7%AA_tested-snippet-lightgreen.svg?style=flat-square"></a>
 
 ```gleam
 import dream_opensearch/client.{type Client, type OpenSearchError}
@@ -123,7 +123,7 @@ Every document function takes a JSON string and returns `Result(String, OpenSear
 
 A `Client` holds the base request of your cluster: the scheme, the host, the port and the headers that each request starts from. `client.new` reads the base URL one time and returns `Error(InvalidUrl(reason))` when it cannot use it. It does not connect. So you can create the client once when your program starts, and pass it to each function that needs it.
 
-### Create a client for a local and a secured cluster <a href="https://github.com/TrustBound/dream_opensearch/blob/4.0.0/test/snippets/guide_getting_started_connect.gleam#L5-L29"><img align="right" alt="Tested snippet" src="https://img.shields.io/badge/%F0%9F%A7%AA_tested-snippet-lightgreen.svg?style=flat-square"></a>
+### Create a client for a local and a secured cluster <a href="https://github.com/TrustBound/dream_opensearch/blob/4.1.0/test/snippets/guide_getting_started_connect.gleam#L5-L29"><img align="right" alt="Tested snippet" src="https://img.shields.io/badge/%F0%9F%A7%AA_tested-snippet-lightgreen.svg?style=flat-square"></a>
 
 ```gleam
 import dream_opensearch/client.{type Client, type OpenSearchError, InvalidUrl}
@@ -157,7 +157,7 @@ A secured cluster wants a user name and password on each request. The client tak
 
 A password often holds characters that have a meaning in a URL, such as `@`, `:` or `/`. `secured_client` percent-encodes the user name and the password, and the client decodes them again before it builds the header. For example, each request from `secured_client("https://search.example.com:9200", "admin", "p@ss:w/rd")` sends this header, which is `admin:p@ss:w/rd` in Base64:
 
-### The authorization header <a href="https://github.com/TrustBound/dream_opensearch/blob/4.0.0/test/outputs/guide_getting_started_authorization.txt"><img align="right" alt="Tested snippet" src="https://img.shields.io/badge/%F0%9F%A7%AA_tested-snippet-lightgreen.svg?style=flat-square"></a>
+### The authorization header <a href="https://github.com/TrustBound/dream_opensearch/blob/4.1.0/test/outputs/guide_getting_started_authorization.txt"><img align="right" alt="Tested snippet" src="https://img.shields.io/badge/%F0%9F%A7%AA_tested-snippet-lightgreen.svg?style=flat-square"></a>
 
 ```text
 authorization: Basic YWRtaW46cEBzczp3L3Jk
@@ -176,7 +176,7 @@ In a real program, read the URL, the user name and the password from your config
 
 OpenSearch stores documents, and each document is a JSON object with an ID. Your program has typed values. So the first thing to write is the step from one to the other. This is the start of a `user_store` module:
 
-### Save a user as a document <a href="https://github.com/TrustBound/dream_opensearch/blob/4.0.0/test/snippets/guide_getting_started_user_store.gleam#L5-L34"><img align="right" alt="Tested snippet" src="https://img.shields.io/badge/%F0%9F%A7%AA_tested-snippet-lightgreen.svg?style=flat-square"></a>
+### Save a user as a document <a href="https://github.com/TrustBound/dream_opensearch/blob/4.1.0/test/snippets/guide_getting_started_user_store.gleam#L5-L34"><img align="right" alt="Tested snippet" src="https://img.shields.io/badge/%F0%9F%A7%AA_tested-snippet-lightgreen.svg?style=flat-square"></a>
 
 ```gleam
 import dream_opensearch/client.{type Client, type OpenSearchError, Rejected}
@@ -215,7 +215,7 @@ The import list holds what all the steps of this guide need, so you can add the 
 
 Every function of the module takes the client and the name of the index, so your program and your tests can use different indexes. `save_user(opensearch, "users", User(id: "123", name: "Alice", email: "alice@example.com"))` sends this request:
 
-### The request of save_user <a href="https://github.com/TrustBound/dream_opensearch/blob/4.0.0/test/outputs/guide_getting_started_save_request.txt"><img align="right" alt="Tested snippet" src="https://img.shields.io/badge/%F0%9F%A7%AA_tested-snippet-lightgreen.svg?style=flat-square"></a>
+### The request of save_user <a href="https://github.com/TrustBound/dream_opensearch/blob/4.1.0/test/outputs/guide_getting_started_save_request.txt"><img align="right" alt="Tested snippet" src="https://img.shields.io/badge/%F0%9F%A7%AA_tested-snippet-lightgreen.svg?style=flat-square"></a>
 
 ```text
 PUT /users/_doc/123
@@ -224,7 +224,7 @@ PUT /users/_doc/123
 
 The ID goes in the path, and it is not part of the document body. `document.index` percent-encodes the index name and the ID, so an ID such as `a/b` or `a#b` stays one ID. OpenSearch answers with status 201 and this body:
 
-### The answer to a new document <a href="https://github.com/TrustBound/dream_opensearch/blob/4.0.0/test/outputs/guide_getting_started_save_response.txt"><img align="right" alt="Tested snippet" src="https://img.shields.io/badge/%F0%9F%A7%AA_tested-snippet-lightgreen.svg?style=flat-square"></a>
+### The answer to a new document <a href="https://github.com/TrustBound/dream_opensearch/blob/4.1.0/test/outputs/guide_getting_started_save_response.txt"><img align="right" alt="Tested snippet" src="https://img.shields.io/badge/%F0%9F%A7%AA_tested-snippet-lightgreen.svg?style=flat-square"></a>
 
 ```text
 {"_index":"users","_id":"123","_version":1,"result":"created","_shards":{"total":2,"successful":1,"failed":0},"_seq_no":0,"_primary_term":1}
@@ -238,7 +238,7 @@ With its default settings, OpenSearch creates the `users` index on the first wri
 
 To find users, send a query with `document.search`, then read the users out of the response. Add this to the same module:
 
-### Find users by name <a href="https://github.com/TrustBound/dream_opensearch/blob/4.0.0/test/snippets/guide_getting_started_user_store.gleam#L36-L60"><img align="right" alt="Tested snippet" src="https://img.shields.io/badge/%F0%9F%A7%AA_tested-snippet-lightgreen.svg?style=flat-square"></a>
+### Find users by name <a href="https://github.com/TrustBound/dream_opensearch/blob/4.1.0/test/snippets/guide_getting_started_user_store.gleam#L36-L60"><img align="right" alt="Tested snippet" src="https://img.shields.io/badge/%F0%9F%A7%AA_tested-snippet-lightgreen.svg?style=flat-square"></a>
 
 ```gleam
 /// Finds the users whose name matches `name`, best match first.
@@ -270,7 +270,7 @@ fn user_hit() -> decode.Decoder(User) {
 
 `query.match("name", "alice")` builds a full-text query. `find_users_by_name(opensearch, "users", "alice")` sends it to the search endpoint of the index:
 
-### The request of find_users_by_name <a href="https://github.com/TrustBound/dream_opensearch/blob/4.0.0/test/outputs/guide_getting_started_search_request.txt"><img align="right" alt="Tested snippet" src="https://img.shields.io/badge/%F0%9F%A7%AA_tested-snippet-lightgreen.svg?style=flat-square"></a>
+### The request of find_users_by_name <a href="https://github.com/TrustBound/dream_opensearch/blob/4.1.0/test/outputs/guide_getting_started_search_request.txt"><img align="right" alt="Tested snippet" src="https://img.shields.io/badge/%F0%9F%A7%AA_tested-snippet-lightgreen.svg?style=flat-square"></a>
 
 ```text
 POST /users/_search
@@ -279,7 +279,7 @@ POST /users/_search
 
 A match query analyzes the text first, so `alice` finds `Alice`. OpenSearch answers with the matching documents under `hits.hits`, best match first:
 
-### The answer to the search <a href="https://github.com/TrustBound/dream_opensearch/blob/4.0.0/test/outputs/guide_getting_started_search_response.txt"><img align="right" alt="Tested snippet" src="https://img.shields.io/badge/%F0%9F%A7%AA_tested-snippet-lightgreen.svg?style=flat-square"></a>
+### The answer to the search <a href="https://github.com/TrustBound/dream_opensearch/blob/4.1.0/test/outputs/guide_getting_started_search_response.txt"><img align="right" alt="Tested snippet" src="https://img.shields.io/badge/%F0%9F%A7%AA_tested-snippet-lightgreen.svg?style=flat-square"></a>
 
 ```text
 {"took":1,"timed_out":false,"_shards":{"total":1,"successful":1,"skipped":0,"failed":0},"hits":{"total":{"value":1,"relation":"eq"},"max_score":0.18232156,"hits":[{"_index":"users","_id":"123","_score":0.18232156,"_source":{"name":"Alice","email":"alice@example.com"}}]}}
@@ -289,7 +289,7 @@ A match query analyzes the text first, so `alice` finds `Alice`. OpenSearch answ
 
 Each hit has the document ID in `_id` and the document you saved in `_source`. `user_hit` reads both and builds a `User`, so the function returns:
 
-### The users that find_users_by_name returns <a href="https://github.com/TrustBound/dream_opensearch/blob/4.0.0/test/outputs/guide_getting_started_found_users.txt"><img align="right" alt="Tested snippet" src="https://img.shields.io/badge/%F0%9F%A7%AA_tested-snippet-lightgreen.svg?style=flat-square"></a>
+### The users that find_users_by_name returns <a href="https://github.com/TrustBound/dream_opensearch/blob/4.1.0/test/outputs/guide_getting_started_found_users.txt"><img align="right" alt="Tested snippet" src="https://img.shields.io/badge/%F0%9F%A7%AA_tested-snippet-lightgreen.svg?style=flat-square"></a>
 
 ```text
 Ok([User(id: "123", name: "Alice", email: "alice@example.com")])
@@ -305,7 +305,7 @@ There is more to search than one match query: exact values, ranges, several cond
 
 `document.delete` deletes one document by its ID. Often you want a delete that does not fail when the document is already gone, for example when a user deletes their account twice. Add this to the module:
 
-### Delete a user <a href="https://github.com/TrustBound/dream_opensearch/blob/4.0.0/test/snippets/guide_getting_started_user_store.gleam#L62-L80"><img align="right" alt="Tested snippet" src="https://img.shields.io/badge/%F0%9F%A7%AA_tested-snippet-lightgreen.svg?style=flat-square"></a>
+### Delete a user <a href="https://github.com/TrustBound/dream_opensearch/blob/4.1.0/test/snippets/guide_getting_started_user_store.gleam#L62-L80"><img align="right" alt="Tested snippet" src="https://img.shields.io/badge/%F0%9F%A7%AA_tested-snippet-lightgreen.svg?style=flat-square"></a>
 
 ```gleam
 /// Deletes the user with `id`. A user that is not there is not an error.
@@ -333,7 +333,7 @@ fn ignore_not_found(body: String) -> Result(Nil, OpenSearchError) {
 
 When the document is not there, OpenSearch answers with status 404. The client returns every response with status 400 or more as `Error(Rejected(status, body))`, so `document.delete` returns `Error(Rejected(status: 404, body:))` with this body:
 
-### The answer to a delete of a missing document <a href="https://github.com/TrustBound/dream_opensearch/blob/4.0.0/test/outputs/guide_getting_started_delete_not_found.txt"><img align="right" alt="Tested snippet" src="https://img.shields.io/badge/%F0%9F%A7%AA_tested-snippet-lightgreen.svg?style=flat-square"></a>
+### The answer to a delete of a missing document <a href="https://github.com/TrustBound/dream_opensearch/blob/4.1.0/test/outputs/guide_getting_started_delete_not_found.txt"><img align="right" alt="Tested snippet" src="https://img.shields.io/badge/%F0%9F%A7%AA_tested-snippet-lightgreen.svg?style=flat-square"></a>
 
 ```text
 {"_index":"users","_id":"123","_version":4,"result":"not_found","_shards":{"total":2,"successful":1,"failed":0},"_seq_no":3,"_primary_term":1}
@@ -347,7 +347,7 @@ This body is from a delete of Alice after she was saved two times and deleted on
 
 Now use the module from a program. This part also shows one thing that surprises almost everyone: a document you just saved is not in search results yet.
 
-### Save a user and find it right away <a href="https://github.com/TrustBound/dream_opensearch/blob/4.0.0/test/snippets/guide_getting_started_user_store.gleam#L82-L111"><img align="right" alt="Tested snippet" src="https://img.shields.io/badge/%F0%9F%A7%AA_tested-snippet-lightgreen.svg?style=flat-square"></a>
+### Save a user and find it right away <a href="https://github.com/TrustBound/dream_opensearch/blob/4.1.0/test/snippets/guide_getting_started_user_store.gleam#L82-L111"><img align="right" alt="Tested snippet" src="https://img.shields.io/badge/%F0%9F%A7%AA_tested-snippet-lightgreen.svg?style=flat-square"></a>
 
 ```gleam
 /// Makes the documents indexed so far in `index` visible to search.
@@ -386,7 +386,7 @@ OpenSearch makes new documents visible to search at each refresh of the index, a
 
 `save_and_find(opensearch, "users")` sends three requests, in this order:
 
-### The requests of save_and_find <a href="https://github.com/TrustBound/dream_opensearch/blob/4.0.0/test/outputs/guide_getting_started_save_and_find_requests.txt"><img align="right" alt="Tested snippet" src="https://img.shields.io/badge/%F0%9F%A7%AA_tested-snippet-lightgreen.svg?style=flat-square"></a>
+### The requests of save_and_find <a href="https://github.com/TrustBound/dream_opensearch/blob/4.1.0/test/outputs/guide_getting_started_save_and_find_requests.txt"><img align="right" alt="Tested snippet" src="https://img.shields.io/badge/%F0%9F%A7%AA_tested-snippet-lightgreen.svg?style=flat-square"></a>
 
 ```text
 PUT /users/_doc/123
@@ -396,7 +396,7 @@ POST /users/_search
 
 `save_and_find` returns `Ok([User(id: "123", name: "Alice", email: "alice@example.com")])`. Run the program with `gleam run`, and `main` prints that value with `string.inspect`, which leaves out the field names:
 
-### What main prints <a href="https://github.com/TrustBound/dream_opensearch/blob/4.0.0/test/outputs/guide_getting_started_main_output.txt"><img align="right" alt="Tested snippet" src="https://img.shields.io/badge/%F0%9F%A7%AA_tested-snippet-lightgreen.svg?style=flat-square"></a>
+### What main prints <a href="https://github.com/TrustBound/dream_opensearch/blob/4.1.0/test/outputs/guide_getting_started_main_output.txt"><img align="right" alt="Tested snippet" src="https://img.shields.io/badge/%F0%9F%A7%AA_tested-snippet-lightgreen.svg?style=flat-square"></a>
 
 ```text
 Ok([User("123", "Alice", "alice@example.com")])
@@ -442,7 +442,7 @@ The module from this guide has two kinds of code: code that talks to the cluster
 
 Add the test framework as a dev dependency, with the version range that this package tests with:
 
-### The dev dependency on dream_test <a href="https://github.com/TrustBound/dream_opensearch/blob/4.0.0/gleam.toml#L27-L28"><img align="right" alt="Tested snippet" src="https://img.shields.io/badge/%F0%9F%A7%AA_tested-snippet-lightgreen.svg?style=flat-square"></a>
+### The dev dependency on dream_test <a href="https://github.com/TrustBound/dream_opensearch/blob/4.1.0/gleam.toml#L28-L29"><img align="right" alt="Tested snippet" src="https://img.shields.io/badge/%F0%9F%A7%AA_tested-snippet-lightgreen.svg?style=flat-square"></a>
 
 ```toml
 [dev-dependencies]
@@ -451,7 +451,7 @@ dream_test = ">= 3.0.0 and < 4.0.0"
 
 Here is a test module for the two parts that need no cluster. It uses [dream_test](https://hexdocs.pm/dream_test):
 
-### Test the user store with a saved response and a refused connection <a href="https://github.com/TrustBound/dream_opensearch/blob/4.0.0/test/snippets/guide_getting_started_testing.gleam#L6-L48"><img align="right" alt="Tested snippet" src="https://img.shields.io/badge/%F0%9F%A7%AA_tested-snippet-lightgreen.svg?style=flat-square"></a>
+### Test the user store with a saved response and a refused connection <a href="https://github.com/TrustBound/dream_opensearch/blob/4.1.0/test/snippets/guide_getting_started_testing.gleam#L6-L48"><img align="right" alt="Tested snippet" src="https://img.shields.io/badge/%F0%9F%A7%AA_tested-snippet-lightgreen.svg?style=flat-square"></a>
 
 ```gleam
 import dream_opensearch/client

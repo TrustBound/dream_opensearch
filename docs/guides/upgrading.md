@@ -27,7 +27,7 @@ pub fn create_local_client() -> Client {
 }
 ```
 
-### After: create a client <a href="https://github.com/TrustBound/dream_opensearch/blob/4.0.0/test/snippets/doc_client_new.gleam#L5-L7"><img align="right" alt="Tested snippet" src="https://img.shields.io/badge/%F0%9F%A7%AA_tested-snippet-lightgreen.svg?style=flat-square"></a>
+### After: create a client <a href="https://github.com/TrustBound/dream_opensearch/blob/4.1.0/test/snippets/doc_client_new.gleam#L5-L7"><img align="right" alt="Tested snippet" src="https://img.shields.io/badge/%F0%9F%A7%AA_tested-snippet-lightgreen.svg?style=flat-square"></a>
 
 ```gleam
 pub fn create_local_client() -> Result(Client, OpenSearchError) {
@@ -50,7 +50,7 @@ In 3.x, the error was a `String`: a message of the client, or the body of an Ope
   }
 ```
 
-### After: show the error <a href="https://github.com/TrustBound/dream_opensearch/blob/4.0.0/test/snippets/doc_document_index.gleam#L14-L17"><img align="right" alt="Tested snippet" src="https://img.shields.io/badge/%F0%9F%A7%AA_tested-snippet-lightgreen.svg?style=flat-square"></a>
+### After: show the error <a href="https://github.com/TrustBound/dream_opensearch/blob/4.1.0/test/snippets/doc_document_index.gleam#L14-L17"><img align="right" alt="Tested snippet" src="https://img.shields.io/badge/%F0%9F%A7%AA_tested-snippet-lightgreen.svg?style=flat-square"></a>
 
 ```gleam
   case document.index(opensearch, index, "123", json.to_string(user)) {
@@ -86,7 +86,7 @@ fn ignore_not_found(body: String) -> Result(Nil, String) {
 }
 ```
 
-### After: accept a missing document <a href="https://github.com/TrustBound/dream_opensearch/blob/4.0.0/test/snippets/guide_getting_started_user_store.gleam#L63-L80"><img align="right" alt="Tested snippet" src="https://img.shields.io/badge/%F0%9F%A7%AA_tested-snippet-lightgreen.svg?style=flat-square"></a>
+### After: accept a missing document <a href="https://github.com/TrustBound/dream_opensearch/blob/4.1.0/test/snippets/guide_getting_started_user_store.gleam#L63-L80"><img align="right" alt="Tested snippet" src="https://img.shields.io/badge/%F0%9F%A7%AA_tested-snippet-lightgreen.svg?style=flat-square"></a>
 
 ```gleam
 pub fn delete_user(
@@ -138,7 +138,7 @@ pub fn safe_url(opensearch: Client) -> String {
 }
 ```
 
-### After: the address for a log line <a href="https://github.com/TrustBound/dream_opensearch/blob/4.0.0/test/snippets/guide_handling_errors_log.gleam#L12-L24"><img align="right" alt="Tested snippet" src="https://img.shields.io/badge/%F0%9F%A7%AA_tested-snippet-lightgreen.svg?style=flat-square"></a>
+### After: the address for a log line <a href="https://github.com/TrustBound/dream_opensearch/blob/4.1.0/test/snippets/guide_handling_errors_log.gleam#L12-L24"><img align="right" alt="Tested snippet" src="https://img.shields.io/badge/%F0%9F%A7%AA_tested-snippet-lightgreen.svg?style=flat-square"></a>
 
 ```gleam
 /// The scheme, the host and the port of `opensearch`. The base request
@@ -160,7 +160,7 @@ pub fn address(opensearch: Client) -> String {
 
 `client.from_request` makes a client from a `dream_http_client` request. Every request of the client starts from that base request, with its scheme, host, port, headers, timeouts and recorder. Use it to set a timeout, to trust another certificate authority, or to record the answers of a cluster for your tests:
 
-### Create a client with a timeout and a recorder <a href="https://github.com/TrustBound/dream_opensearch/blob/4.0.0/test/snippets/doc_client_from_request.gleam#L8-L16"><img align="right" alt="Tested snippet" src="https://img.shields.io/badge/%F0%9F%A7%AA_tested-snippet-lightgreen.svg?style=flat-square"></a>
+### Create a client with a timeout and a recorder <a href="https://github.com/TrustBound/dream_opensearch/blob/4.1.0/test/snippets/doc_client_from_request.gleam#L8-L16"><img align="right" alt="Tested snippet" src="https://img.shields.io/badge/%F0%9F%A7%AA_tested-snippet-lightgreen.svg?style=flat-square"></a>
 
 ```gleam
 pub fn create_recorded_client(recorder: Recorder) -> Client {

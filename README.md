@@ -30,6 +30,7 @@ A standalone HTTP client for OpenSearch (or Elasticsearch) clusters. It indexes,
 - ✅ Bulk operations
 - ✅ Query builder helpers
 - ✅ Typed errors: match on `Rejected`, `Unavailable`, `TimedOut` and more
+- ✅ Shared errors: `client.to_error` maps an `OpenSearchError` to `dream_errors.Error`, the error type of the Dream packages
 - ✅ A client from a `dream_http_client` request, for a timeout, a recorder or a certificate authority
 - ✅ Zero dependencies on Dream or other frameworks
 
@@ -41,7 +42,7 @@ gleam add dream_opensearch
 
 ## Quick Start
 
-### Index, search and delete a document <a href="https://github.com/TrustBound/dream_opensearch/blob/4.0.0/test/snippets/readme_quick_start.gleam#L5-L34"><img align="right" alt="Tested snippet" src="https://img.shields.io/badge/%F0%9F%A7%AA_tested-snippet-lightgreen.svg?style=flat-square"></a> <a href="https://github.com/TrustBound/dream_opensearch/blob/4.0.0/docs/guides/getting-started.md#index-search-and-delete-a-document-"><img align="right" alt="Guide: Getting started" title="Guide: Getting started" src="https://img.shields.io/badge/%F0%9F%93%96_read-guide-blue.svg?style=flat-square"></a>
+### Index, search and delete a document <a href="https://github.com/TrustBound/dream_opensearch/blob/4.1.0/test/snippets/readme_quick_start.gleam#L5-L34"><img align="right" alt="Tested snippet" src="https://img.shields.io/badge/%F0%9F%A7%AA_tested-snippet-lightgreen.svg?style=flat-square"></a> <a href="https://github.com/TrustBound/dream_opensearch/blob/4.1.0/docs/guides/getting-started.md#index-search-and-delete-a-document-"><img align="right" alt="Guide: Getting started" title="Guide: Getting started" src="https://img.shields.io/badge/%F0%9F%93%96_read-guide-blue.svg?style=flat-square"></a>
 
 ```gleam
 import dream_opensearch/client.{type Client, type OpenSearchError}

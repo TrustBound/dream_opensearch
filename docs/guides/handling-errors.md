@@ -60,7 +60,7 @@ Here is every kind of error, with the exact value, for a call such as `document.
 
 The body of a `Rejected` error is whatever the server sent. For OpenSearch itself, that is a JSON error object, like this body of the 404 answer to a search on a missing index:
 
-### The answer for a missing index <a href="https://github.com/TrustBound/dream_opensearch/blob/4.0.0/test/outputs/guide_handling_errors_missing_index.txt"><img align="right" alt="Tested snippet" src="https://img.shields.io/badge/%F0%9F%A7%AA_tested-snippet-lightgreen.svg?style=flat-square"></a>
+### The answer for a missing index <a href="https://github.com/TrustBound/dream_opensearch/blob/4.1.0/test/outputs/guide_handling_errors_missing_index.txt"><img align="right" alt="Tested snippet" src="https://img.shields.io/badge/%F0%9F%A7%AA_tested-snippet-lightgreen.svg?style=flat-square"></a>
 
 ```text
 {"error":{"root_cause":[{"type":"index_not_found_exception","reason":"no such index [books]","index":"books","resource.id":"books","resource.type":"index_or_alias","index_uuid":"_na_"}],"type":"index_not_found_exception","reason":"no such index [books]","index":"books","resource.id":"books","resource.type":"index_or_alias","index_uuid":"_na_"},"status":404}
@@ -77,11 +77,26 @@ Two more facts you can count on. No error contains the user name or the password
 
 When the server closes the connection with no answer, the client sends a GET, HEAD, PUT or DELETE request a second time on a new connection. It returns `Unavailable("Remote closed connection")` only when that one fails too. For example, `document.index` and `document.delete` go two times. A POST goes one time only, because it may not be safe to repeat: `document.search` and `document.bulk` return the error after the first try.
 
+### The shared error type
+
+`client.to_error(error)` maps an `OpenSearchError` to `dream_errors.Error(OpenSearchError)`, the error type that the Dream packages share. An app that also uses other Dream packages can then handle all their errors with one type. The message is the text of `client.describe_error`, for developers and logs.
+
+| `OpenSearchError` | `dream_errors.Error` |
+|:---|:---|
+| `InvalidUrl(reason)` | `Invalid` |
+| `Unavailable(reason)` | `Unavailable` |
+| `TimedOut(timeout_ms)` | `Timeout` |
+| `Rejected(status: 404, body)` | `NotFound` |
+| `Rejected(status: 409, body)` | `Conflict` |
+| `Rejected` with another status, `InvalidResponseBody(status)`, `NoRecording(..)` | `Failed` |
+
+Each one keeps the `OpenSearchError` as the cause, except `NotFound`, which has no cause. Its message holds the status and the body of the answer.
+
 ## Step 2: Read the details of an OpenSearch error
 
 The status of a `Rejected` error tells you a little. The error type in its body tells you what went wrong. This is the start of an `opensearch_errors` module:
 
-### Read the type and the reason of an OpenSearch error <a href="https://github.com/TrustBound/dream_opensearch/blob/4.0.0/test/snippets/guide_handling_errors_classify.gleam#L6-L34"><img align="right" alt="Tested snippet" src="https://img.shields.io/badge/%F0%9F%A7%AA_tested-snippet-lightgreen.svg?style=flat-square"></a>
+### Read the type and the reason of an OpenSearch error <a href="https://github.com/TrustBound/dream_opensearch/blob/4.1.0/test/snippets/guide_handling_errors_classify.gleam#L6-L34"><img align="right" alt="Tested snippet" src="https://img.shields.io/badge/%F0%9F%A7%AA_tested-snippet-lightgreen.svg?style=flat-square"></a>
 
 ```gleam
 import dream_opensearch/client.{
@@ -119,7 +134,7 @@ fn details_decoder() -> decode.Decoder(ErrorDetails) {
 
 For the missing index from Step 1, `error_details` returns:
 
-### The value that error_details returns <a href="https://github.com/TrustBound/dream_opensearch/blob/4.0.0/test/outputs/guide_handling_errors_classified.txt"><img align="right" alt="Tested snippet" src="https://img.shields.io/badge/%F0%9F%A7%AA_tested-snippet-lightgreen.svg?style=flat-square"></a>
+### The value that error_details returns <a href="https://github.com/TrustBound/dream_opensearch/blob/4.1.0/test/outputs/guide_handling_errors_classified.txt"><img align="right" alt="Tested snippet" src="https://img.shields.io/badge/%F0%9F%A7%AA_tested-snippet-lightgreen.svg?style=flat-square"></a>
 
 ```text
 Ok(ErrorDetails(error_type: "index_not_found_exception", reason: "no such index [books]"))
@@ -135,7 +150,7 @@ The error type is the part of the body to match on. The status alone is not enou
 
 Some errors pass on their own if you wait: a cluster that is still starting, a node under too much load, a network that dropped a connection. Others fail the same way every time until someone changes the request or the configuration. Add this to the module:
 
-### Decide which errors are worth a retry <a href="https://github.com/TrustBound/dream_opensearch/blob/4.0.0/test/snippets/guide_handling_errors_classify.gleam#L36-L48"><img align="right" alt="Tested snippet" src="https://img.shields.io/badge/%F0%9F%A7%AA_tested-snippet-lightgreen.svg?style=flat-square"></a>
+### Decide which errors are worth a retry <a href="https://github.com/TrustBound/dream_opensearch/blob/4.1.0/test/snippets/guide_handling_errors_classify.gleam#L36-L48"><img align="right" alt="Tested snippet" src="https://img.shields.io/badge/%F0%9F%A7%AA_tested-snippet-lightgreen.svg?style=flat-square"></a>
 
 ```gleam
 /// True for the errors that can go away if you send the same request
@@ -174,7 +189,7 @@ Retry with a wait between the tries, and with a limit on the number of tries. A 
 
 When a request fails, you want to log which cluster it went to, and what went wrong. `client.describe_error` turns any error into one line of text, and that text never holds the user name or the password. The client keeps the password only in the `authorization` header of its base request, so build the address from the scheme, the host and the port:
 
-### Write a log line without the user name and password <a href="https://github.com/TrustBound/dream_opensearch/blob/4.0.0/test/snippets/guide_handling_errors_log.gleam#L6-L31"><img align="right" alt="Tested snippet" src="https://img.shields.io/badge/%F0%9F%A7%AA_tested-snippet-lightgreen.svg?style=flat-square"></a>
+### Write a log line without the user name and password <a href="https://github.com/TrustBound/dream_opensearch/blob/4.1.0/test/snippets/guide_handling_errors_log.gleam#L6-L31"><img align="right" alt="Tested snippet" src="https://img.shields.io/badge/%F0%9F%A7%AA_tested-snippet-lightgreen.svg?style=flat-square"></a>
 
 ```gleam
 import dream_http_client/client as http_client
@@ -207,7 +222,7 @@ pub fn failure_line(opensearch: Client, error: OpenSearchError) -> String {
 
 For a client created with `client.new("https://admin:s3cret@search.example.com:9200")` and a refused connection, `failure_line` returns:
 
-### The line that failure_line returns <a href="https://github.com/TrustBound/dream_opensearch/blob/4.0.0/test/outputs/guide_handling_errors_failure_line.txt"><img align="right" alt="Tested snippet" src="https://img.shields.io/badge/%F0%9F%A7%AA_tested-snippet-lightgreen.svg?style=flat-square"></a>
+### The line that failure_line returns <a href="https://github.com/TrustBound/dream_opensearch/blob/4.1.0/test/outputs/guide_handling_errors_failure_line.txt"><img align="right" alt="Tested snippet" src="https://img.shields.io/badge/%F0%9F%A7%AA_tested-snippet-lightgreen.svg?style=flat-square"></a>
 
 ```text
 OpenSearch request to https://search.example.com:9200 failed: OpenSearch is unavailable: Connection failed: Connection refused
@@ -219,7 +234,7 @@ The text of a `Rejected` error holds the body of the answer. Log it, because it 
 
 The client waits 30 seconds for an answer, the default of `dream_http_client`. To wait longer or less, build the client from a `dream_http_client` request with `client.from_request`, and set the timeout on that request:
 
-### Make a client with a timeout of its own <a href="https://github.com/TrustBound/dream_opensearch/blob/4.0.0/test/snippets/guide_handling_errors_timeout.gleam#L5-L18"><img align="right" alt="Tested snippet" src="https://img.shields.io/badge/%F0%9F%A7%AA_tested-snippet-lightgreen.svg?style=flat-square"></a>
+### Make a client with a timeout of its own <a href="https://github.com/TrustBound/dream_opensearch/blob/4.1.0/test/snippets/guide_handling_errors_timeout.gleam#L5-L18"><img align="right" alt="Tested snippet" src="https://img.shields.io/badge/%F0%9F%A7%AA_tested-snippet-lightgreen.svg?style=flat-square"></a>
 
 ```gleam
 import dream_http_client/client as http_client
@@ -251,7 +266,7 @@ Your error handling is the code that runs least in development, so test it on pu
 
 Add `dream_test` as a dev dependency, with the version range that this package tests with:
 
-### The dev dependency on dream_test <a href="https://github.com/TrustBound/dream_opensearch/blob/4.0.0/gleam.toml#L27-L28"><img align="right" alt="Tested snippet" src="https://img.shields.io/badge/%F0%9F%A7%AA_tested-snippet-lightgreen.svg?style=flat-square"></a>
+### The dev dependency on dream_test <a href="https://github.com/TrustBound/dream_opensearch/blob/4.1.0/gleam.toml#L28-L29"><img align="right" alt="Tested snippet" src="https://img.shields.io/badge/%F0%9F%A7%AA_tested-snippet-lightgreen.svg?style=flat-square"></a>
 
 ```toml
 [dev-dependencies]
@@ -260,7 +275,7 @@ dream_test = ">= 3.0.0 and < 4.0.0"
 
 Here is a test module for the error handling:
 
-### Test the error handling with real errors <a href="https://github.com/TrustBound/dream_opensearch/blob/4.0.0/test/snippets/guide_handling_errors_testing.gleam#L5-L79"><img align="right" alt="Tested snippet" src="https://img.shields.io/badge/%F0%9F%A7%AA_tested-snippet-lightgreen.svg?style=flat-square"></a>
+### Test the error handling with real errors <a href="https://github.com/TrustBound/dream_opensearch/blob/4.1.0/test/snippets/guide_handling_errors_testing.gleam#L5-L79"><img align="right" alt="Tested snippet" src="https://img.shields.io/badge/%F0%9F%A7%AA_tested-snippet-lightgreen.svg?style=flat-square"></a>
 
 ```gleam
 import dream_opensearch/client.{InvalidUrl, Rejected, Unavailable}

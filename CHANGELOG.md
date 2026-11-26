@@ -5,6 +5,21 @@ All notable changes to `dream_opensearch` will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [4.1.0] - 2026-11-26
+
+### Added
+
+- `client.to_error(error)` maps an `OpenSearchError` to `dream_errors.Error(OpenSearchError)`, the error type that the Dream packages share. `InvalidUrl` gives `Invalid`, `Unavailable` gives `Unavailable`, `TimedOut` gives `Timeout`, `Rejected` with status 404 gives `NotFound`, `Rejected` with status 409 gives `Conflict`, and every other error gives `Failed`. The message is the text of `describe_error`. Each error keeps the `OpenSearchError` as the cause, except `NotFound`, which has no cause.
+- `dream_errors` (`>= 1.0.0 and < 2.0.0`) is a new dependency.
+
+### Documentation
+
+- The guide "Handling errors" shows the mapping of each `OpenSearchError`.
+
+### Testing
+
+- 281 tests, 0 failed, 100% line coverage (137/137 lines of `src/`), in 18.4 seconds over one run, with the coverage report on. Apple M1 Max, 10 cores, 64 GB, macOS 26.5.1, OTP 29, Gleam 1.19.2, OpenSearch 2.19.1 in Docker on the same machine.
+
 ## [4.0.0] - 2026-11-25
 
 ### Added

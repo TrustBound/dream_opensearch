@@ -44,7 +44,7 @@ Every example in this guide is tested against OpenSearch 2.19.1 in Docker. [Gett
 
 The request that creates an index takes a body with two parts: `settings`, which set up the index, and `mappings`, which set the type of each field. Build both with `gleam/json`. This is the start of a `books_index` module:
 
-### Create the books index with settings and a mapping <a href="https://github.com/TrustBound/dream_opensearch/blob/4.0.0/test/snippets/guide_managing_indexes_create.gleam#L6-L53"><img align="right" alt="Tested snippet" src="https://img.shields.io/badge/%F0%9F%A7%AA_tested-snippet-lightgreen.svg?style=flat-square"></a>
+### Create the books index with settings and a mapping <a href="https://github.com/TrustBound/dream_opensearch/blob/4.1.0/test/snippets/guide_managing_indexes_create.gleam#L6-L53"><img align="right" alt="Tested snippet" src="https://img.shields.io/badge/%F0%9F%A7%AA_tested-snippet-lightgreen.svg?style=flat-square"></a>
 
 ```gleam
 import dream_opensearch/client.{type Client, type OpenSearchError, Rejected}
@@ -99,7 +99,7 @@ pub fn create_books_index(
 
 `books_index_body()` returns this body:
 
-### The body of books_index_body <a href="https://github.com/TrustBound/dream_opensearch/blob/4.0.0/test/outputs/guide_managing_indexes_books_index_body.txt"><img align="right" alt="Tested snippet" src="https://img.shields.io/badge/%F0%9F%A7%AA_tested-snippet-lightgreen.svg?style=flat-square"></a>
+### The body of books_index_body <a href="https://github.com/TrustBound/dream_opensearch/blob/4.1.0/test/outputs/guide_managing_indexes_books_index_body.txt"><img align="right" alt="Tested snippet" src="https://img.shields.io/badge/%F0%9F%A7%AA_tested-snippet-lightgreen.svg?style=flat-square"></a>
 
 ```text
 {"settings":{"number_of_shards":1,"number_of_replicas":1},"mappings":{"dynamic":"strict","properties":{"title":{"type":"text"},"author":{"type":"keyword"},"year":{"type":"integer"},"in_stock":{"type":"boolean"}}}}
@@ -107,7 +107,7 @@ pub fn create_books_index(
 
 `create_books_index(opensearch, "books")` sends it with `document.create_index`, as `PUT /books`. OpenSearch answers with status 200:
 
-### The answer to the create <a href="https://github.com/TrustBound/dream_opensearch/blob/4.0.0/test/outputs/guide_managing_indexes_created.txt"><img align="right" alt="Tested snippet" src="https://img.shields.io/badge/%F0%9F%A7%AA_tested-snippet-lightgreen.svg?style=flat-square"></a>
+### The answer to the create <a href="https://github.com/TrustBound/dream_opensearch/blob/4.1.0/test/outputs/guide_managing_indexes_created.txt"><img align="right" alt="Tested snippet" src="https://img.shields.io/badge/%F0%9F%A7%AA_tested-snippet-lightgreen.svg?style=flat-square"></a>
 
 ```text
 {"acknowledged":true,"shards_acknowledged":true,"index":"books"}
@@ -126,7 +126,7 @@ The index name goes in the URL path, and `document.create_index` percent-encodes
 
 You want the index to exist before your program writes to it, so the natural place for `create_books_index` is the start of the program. But the second start fails: the index is already there. OpenSearch answers with status 400:
 
-### The answer when the index exists <a href="https://github.com/TrustBound/dream_opensearch/blob/4.0.0/test/outputs/guide_managing_indexes_already_exists.txt"><img align="right" alt="Tested snippet" src="https://img.shields.io/badge/%F0%9F%A7%AA_tested-snippet-lightgreen.svg?style=flat-square"></a>
+### The answer when the index exists <a href="https://github.com/TrustBound/dream_opensearch/blob/4.1.0/test/outputs/guide_managing_indexes_already_exists.txt"><img align="right" alt="Tested snippet" src="https://img.shields.io/badge/%F0%9F%A7%AA_tested-snippet-lightgreen.svg?style=flat-square"></a>
 
 ```text
 {"error":{"root_cause":[{"type":"resource_already_exists_exception","reason":"index [books/szRdA72vTjirBMobGJfr3g] already exists","index":"books","index_uuid":"szRdA72vTjirBMobGJfr3g"}],"type":"resource_already_exists_exception","reason":"index [books/szRdA72vTjirBMobGJfr3g] already exists","index":"books","index_uuid":"szRdA72vTjirBMobGJfr3g"},"status":400}
@@ -134,7 +134,7 @@ You want the index to exist before your program writes to it, so the natural pla
 
 Accept that one error, and keep all others. Add this to the module:
 
-### Create the books index unless it exists <a href="https://github.com/TrustBound/dream_opensearch/blob/4.0.0/test/snippets/guide_managing_indexes_create.gleam#L55-L79"><img align="right" alt="Tested snippet" src="https://img.shields.io/badge/%F0%9F%A7%AA_tested-snippet-lightgreen.svg?style=flat-square"></a>
+### Create the books index unless it exists <a href="https://github.com/TrustBound/dream_opensearch/blob/4.1.0/test/snippets/guide_managing_indexes_create.gleam#L55-L79"><img align="right" alt="Tested snippet" src="https://img.shields.io/badge/%F0%9F%A7%AA_tested-snippet-lightgreen.svg?style=flat-square"></a>
 
 ```gleam
 /// Creates the index `index_name` for books, unless it already exists.
@@ -166,7 +166,7 @@ fn accept_existing_body(
 
 `ensure_books_index(opensearch, "books")` returns `Ok(Nil)` when it creates the index, and `Ok(Nil)` when the index already exists. Any other error stays an error. For example, a name in upper case gets status 400 with `invalid_index_name_exception`, and `ensure_books_index(opensearch, "Books")` returns that body as the error:
 
-### The answer to an upper-case name <a href="https://github.com/TrustBound/dream_opensearch/blob/4.0.0/test/outputs/guide_managing_indexes_invalid_name.txt"><img align="right" alt="Tested snippet" src="https://img.shields.io/badge/%F0%9F%A7%AA_tested-snippet-lightgreen.svg?style=flat-square"></a>
+### The answer to an upper-case name <a href="https://github.com/TrustBound/dream_opensearch/blob/4.1.0/test/outputs/guide_managing_indexes_invalid_name.txt"><img align="right" alt="Tested snippet" src="https://img.shields.io/badge/%F0%9F%A7%AA_tested-snippet-lightgreen.svg?style=flat-square"></a>
 
 ```text
 {"error":{"root_cause":[{"type":"invalid_index_name_exception","reason":"Invalid index name [Books], must be lowercase","index":"Books","index_uuid":"_na_"}],"type":"invalid_index_name_exception","reason":"Invalid index name [Books], must be lowercase","index":"Books","index_uuid":"_na_"},"status":400}
@@ -182,7 +182,7 @@ Why not check first, and create only when the index is missing? Because two copi
 
 The `document` module covers creating and deleting an index. For the other index APIs, use `client.send_request`, which sends any method, path and body to the cluster with your base URL and credentials. This is a second module, `index_tools`, with three of them:
 
-### Check, refresh and count an index <a href="https://github.com/TrustBound/dream_opensearch/blob/4.0.0/test/snippets/guide_managing_indexes_maintain.gleam#L6-L55"><img align="right" alt="Tested snippet" src="https://img.shields.io/badge/%F0%9F%A7%AA_tested-snippet-lightgreen.svg?style=flat-square"></a>
+### Check, refresh and count an index <a href="https://github.com/TrustBound/dream_opensearch/blob/4.1.0/test/snippets/guide_managing_indexes_maintain.gleam#L6-L55"><img align="right" alt="Tested snippet" src="https://img.shields.io/badge/%F0%9F%A7%AA_tested-snippet-lightgreen.svg?style=flat-square"></a>
 
 ```gleam
 import dream_opensearch/client.{type Client, type OpenSearchError, Rejected}
@@ -255,7 +255,7 @@ Here is what each function sends, and what it returns:
 
 You cannot change the type of a field in an existing index. To change a mapping, create a new index with the new mapping, and copy the documents into it with the reindex API. Add this to `index_tools`:
 
-### Copy every document into another index <a href="https://github.com/TrustBound/dream_opensearch/blob/4.0.0/test/snippets/guide_managing_indexes_maintain.gleam#L57-L76"><img align="right" alt="Tested snippet" src="https://img.shields.io/badge/%F0%9F%A7%AA_tested-snippet-lightgreen.svg?style=flat-square"></a>
+### Copy every document into another index <a href="https://github.com/TrustBound/dream_opensearch/blob/4.1.0/test/snippets/guide_managing_indexes_maintain.gleam#L57-L76"><img align="right" alt="Tested snippet" src="https://img.shields.io/badge/%F0%9F%A7%AA_tested-snippet-lightgreen.svg?style=flat-square"></a>
 
 ```gleam
 /// Copies every document of `source` into `destination`. Returns how many
@@ -282,7 +282,7 @@ pub fn copy_index(
 
 `copy_index(opensearch, "books_v1", "books_v2")` sends:
 
-### The request of copy_index <a href="https://github.com/TrustBound/dream_opensearch/blob/4.0.0/test/outputs/guide_managing_indexes_reindex_request.txt"><img align="right" alt="Tested snippet" src="https://img.shields.io/badge/%F0%9F%A7%AA_tested-snippet-lightgreen.svg?style=flat-square"></a>
+### The request of copy_index <a href="https://github.com/TrustBound/dream_opensearch/blob/4.1.0/test/outputs/guide_managing_indexes_reindex_request.txt"><img align="right" alt="Tested snippet" src="https://img.shields.io/badge/%F0%9F%A7%AA_tested-snippet-lightgreen.svg?style=flat-square"></a>
 
 ```text
 POST /_reindex
@@ -291,7 +291,7 @@ POST /_reindex
 
 OpenSearch copies the documents and answers when it is done:
 
-### The answer to the reindex <a href="https://github.com/TrustBound/dream_opensearch/blob/4.0.0/test/outputs/guide_managing_indexes_reindex_response.txt"><img align="right" alt="Tested snippet" src="https://img.shields.io/badge/%F0%9F%A7%AA_tested-snippet-lightgreen.svg?style=flat-square"></a>
+### The answer to the reindex <a href="https://github.com/TrustBound/dream_opensearch/blob/4.1.0/test/outputs/guide_managing_indexes_reindex_response.txt"><img align="right" alt="Tested snippet" src="https://img.shields.io/badge/%F0%9F%A7%AA_tested-snippet-lightgreen.svg?style=flat-square"></a>
 
 ```text
 {"took":59,"timed_out":false,"total":2,"updated":0,"created":2,"deleted":0,"batches":1,"version_conflicts":0,"noops":0,"retries":{"bulk":0,"search":0},"throttled_millis":0,"requests_per_second":-1.0,"throttled_until_millis":0,"failures":[]}
@@ -310,7 +310,7 @@ The reindex request waits until the copy is done, and a large index takes a long
 
 `document.delete_index` deletes an index and every document in it, at once, with no way to undo it. A clean-up script usually wants to accept an index that is already gone. Add this to `index_tools`:
 
-### Delete an index if it is there <a href="https://github.com/TrustBound/dream_opensearch/blob/4.0.0/test/snippets/guide_managing_indexes_maintain.gleam#L78-L89"><img align="right" alt="Tested snippet" src="https://img.shields.io/badge/%F0%9F%A7%AA_tested-snippet-lightgreen.svg?style=flat-square"></a>
+### Delete an index if it is there <a href="https://github.com/TrustBound/dream_opensearch/blob/4.1.0/test/snippets/guide_managing_indexes_maintain.gleam#L78-L89"><img align="right" alt="Tested snippet" src="https://img.shields.io/badge/%F0%9F%A7%AA_tested-snippet-lightgreen.svg?style=flat-square"></a>
 
 ```gleam
 /// Deletes the index `index_name`. An index that is not there is not an
@@ -370,7 +370,7 @@ The setup code also has a part you can test as a plain value, the index body, an
 
 Add `dream_test` as a dev dependency, with the version range that this package tests with:
 
-### The dev dependency on dream_test <a href="https://github.com/TrustBound/dream_opensearch/blob/4.0.0/gleam.toml#L27-L28"><img align="right" alt="Tested snippet" src="https://img.shields.io/badge/%F0%9F%A7%AA_tested-snippet-lightgreen.svg?style=flat-square"></a>
+### The dev dependency on dream_test <a href="https://github.com/TrustBound/dream_opensearch/blob/4.1.0/gleam.toml#L28-L29"><img align="right" alt="Tested snippet" src="https://img.shields.io/badge/%F0%9F%A7%AA_tested-snippet-lightgreen.svg?style=flat-square"></a>
 
 ```toml
 [dev-dependencies]
@@ -379,7 +379,7 @@ dream_test = ">= 3.0.0 and < 4.0.0"
 
 Here is a test module for both:
 
-### Test the index body and the setup error path <a href="https://github.com/TrustBound/dream_opensearch/blob/4.0.0/test/snippets/guide_managing_indexes_testing.gleam#L6-L46"><img align="right" alt="Tested snippet" src="https://img.shields.io/badge/%F0%9F%A7%AA_tested-snippet-lightgreen.svg?style=flat-square"></a>
+### Test the index body and the setup error path <a href="https://github.com/TrustBound/dream_opensearch/blob/4.1.0/test/snippets/guide_managing_indexes_testing.gleam#L6-L46"><img align="right" alt="Tested snippet" src="https://img.shields.io/badge/%F0%9F%A7%AA_tested-snippet-lightgreen.svg?style=flat-square"></a>
 
 ```gleam
 import dream_opensearch/client.{Unavailable}

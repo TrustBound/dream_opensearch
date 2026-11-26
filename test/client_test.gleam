@@ -10,6 +10,7 @@
 //// statuses such as 204, 399, 500 and 503, a body that is not JSON or not
 //// UTF-8, and a TLS handshake.
 
+import dream_errors
 import dream_http_client/client as http_client
 import dream_http_client/recorder
 import dream_opensearch/client.{
@@ -31,6 +32,7 @@ import opensearch_cluster
 import opensearch_test_server.{
   type TestServer, CaptureRawBytes, HoldWithoutAnswer, Respond, RespondBytes,
 }
+import snippets/doc_client_to_error
 
 /// The recordings of the recorded round trip. Record them again with
 /// `RECORD_OPENSEARCH=true gleam test`, with the cluster of
@@ -1120,6 +1122,170 @@ pub fn tests() -> TestSuite {
         |> or_fail_with(
           "send_request with a host that does not resolve returns the lookup error",
         )
+      }),
+    ]),
+    group("to_error", [
+      it("maps InvalidUrl to Invalid", fn() {
+        // Arrange
+        let error = InvalidUrl("the URL has no host")
+
+        // Act
+        let result = client.to_error(error)
+
+        // Assert
+        result
+        |> should
+        |> be_equal(dream_errors.Invalid(
+          "Invalid OpenSearch URL: the URL has no host",
+          InvalidUrl("the URL has no host"),
+        ))
+        |> or_fail_with("Should maps InvalidUrl to Invalid")
+      }),
+      it("maps Unavailable to Unavailable", fn() {
+        // Arrange
+        let error = Unavailable("Connection failed: Connection refused")
+
+        // Act
+        let result = client.to_error(error)
+
+        // Assert
+        result
+        |> should
+        |> be_equal(dream_errors.Unavailable(
+          "OpenSearch is unavailable: Connection failed: Connection refused",
+          Unavailable("Connection failed: Connection refused"),
+        ))
+        |> or_fail_with("Should maps Unavailable to Unavailable")
+      }),
+      it("maps TimedOut to Timeout", fn() {
+        // Arrange
+        let error = TimedOut(timeout_ms: 30_000)
+
+        // Act
+        let result = client.to_error(error)
+
+        // Assert
+        result
+        |> should
+        |> be_equal(dream_errors.Timeout(
+          "OpenSearch sent no answer within 30000 ms",
+          TimedOut(timeout_ms: 30_000),
+        ))
+        |> or_fail_with("Should maps TimedOut to Timeout")
+      }),
+      it("maps Rejected with status 404 to NotFound", fn() {
+        // Arrange
+        let error = Rejected(status: 404, body: "{\"found\":false}")
+
+        // Act
+        let result = client.to_error(error)
+
+        // Assert
+        result
+        |> should
+        |> be_equal(dream_errors.NotFound(
+          "OpenSearch rejected the request with status 404: {\"found\":false}",
+        ))
+        |> or_fail_with("Should maps Rejected with status 404 to NotFound")
+      }),
+      it("maps Rejected with status 409 to Conflict", fn() {
+        // Arrange
+        let error = Rejected(status: 409, body: "{\"status\":409}")
+
+        // Act
+        let result = client.to_error(error)
+
+        // Assert
+        result
+        |> should
+        |> be_equal(dream_errors.Conflict(
+          "OpenSearch rejected the request with status 409: {\"status\":409}",
+          Rejected(status: 409, body: "{\"status\":409}"),
+        ))
+        |> or_fail_with("Should maps Rejected with status 409 to Conflict")
+      }),
+      it("maps Rejected with status 400 to Failed", fn() {
+        // Arrange
+        let error = Rejected(status: 400, body: "{\"status\":400}")
+
+        // Act
+        let result = client.to_error(error)
+
+        // Assert
+        result
+        |> should
+        |> be_equal(dream_errors.Failed(
+          "OpenSearch rejected the request with status 400: {\"status\":400}",
+          Rejected(status: 400, body: "{\"status\":400}"),
+        ))
+        |> or_fail_with("Should maps Rejected with status 400 to Failed")
+      }),
+      it("maps InvalidResponseBody to Failed", fn() {
+        // Arrange
+        let error = InvalidResponseBody(status: 200)
+
+        // Act
+        let result = client.to_error(error)
+
+        // Assert
+        result
+        |> should
+        |> be_equal(dream_errors.Failed(
+          "The OpenSearch response body is not valid UTF-8 (status 200)",
+          InvalidResponseBody(status: 200),
+        ))
+        |> or_fail_with("Should maps InvalidResponseBody to Failed")
+      }),
+      it("maps NoRecording to Failed", fn() {
+        // Arrange
+        let error =
+          NoRecording(
+            method: "GET",
+            url: "http://localhost:9201/",
+            details: "No recording for GET http://localhost:9201/",
+          )
+
+        // Act
+        let result = client.to_error(error)
+
+        // Assert
+        result
+        |> should
+        |> be_equal(dream_errors.Failed(
+          "No recording for the OpenSearch request: No recording for GET http://localhost:9201/",
+          NoRecording(
+            method: "GET",
+            url: "http://localhost:9201/",
+            details: "No recording for GET http://localhost:9201/",
+          ),
+        ))
+        |> or_fail_with("Should maps NoRecording to Failed")
+      }),
+      it("the doc snippet maps a missing document to NotFound", fn() {
+        // Arrange and act
+        let result = {
+          use os_client, index <- opensearch_cluster.with_index("users")
+          use _ <- result.try(
+            document.create_index(os_client, index, "{}")
+            |> opensearch_cluster.as_text,
+          )
+          // The index name varies, so put the name of the test in its place
+          case doc_client_to_error.get_document(os_client, index, "9") {
+            Error(dream_errors.NotFound(message)) ->
+              Ok(Error(string.replace(message, index, "users")))
+            other -> Ok(Ok(string.inspect(other)))
+          }
+        }
+
+        // Assert
+        result
+        |> should
+        |> be_equal(
+          Ok(Error(
+            "OpenSearch rejected the request with status 404: {\"_index\":\"users\",\"_id\":\"9\",\"found\":false}",
+          )),
+        )
+        |> or_fail_with("Should map the 404 of a missing document to NotFound")
       }),
     ]),
   ])

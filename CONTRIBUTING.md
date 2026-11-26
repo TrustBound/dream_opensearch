@@ -11,6 +11,16 @@ dream_opensearch is part of the [Dream](https://github.com/TrustBound/dream) fam
 🤝 **[Code of Conduct](CODE_OF_CONDUCT.md)** - Community standards  
 🔒 **[Security Policy](SECURITY.md)** - Reporting security vulnerabilities
 
+## Set up dream_errors, which is not on Hex yet
+
+dream_opensearch needs dream_errors 1.0.0, and dream_errors is not on Hex yet. Until it is, `gleam deps download` fails, and CI fails at that step. To build on your computer:
+
+1. Clone [dream_errors](https://github.com/TrustBound/dream_errors) next to this repository.
+2. Copy its `src` folder and its `gleam.toml` into `build/packages/dream_errors`.
+3. Add the line `dream_errors = "1.0.0"` under `[packages]` in `build/packages/packages.toml`.
+
+`manifest.toml` lists dream_errors with a checksum of zeros. When dream_errors is on Hex, remove this section and run `gleam deps update dream_errors` to write the real checksum.
+
 ## Quick Start for Contributors
 
 ### Prerequisites

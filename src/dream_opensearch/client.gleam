@@ -6,7 +6,7 @@
 ////
 //// ## Quick Start
 ////
-//// ### Create a client and index a document <a href="https://github.com/TrustBound/dream_opensearch/blob/4.0.0/test/snippets/doc_client_quick_start.gleam#L3-L15"><img align="right" alt="Tested snippet" src="https://img.shields.io/badge/%F0%9F%A7%AA_tested-snippet-lightgreen.svg?style=flat-square"></a>
+//// ### Create a client and index a document <a href="https://github.com/TrustBound/dream_opensearch/blob/4.1.0/test/snippets/doc_client_quick_start.gleam#L3-L15"><img align="right" alt="Tested snippet" src="https://img.shields.io/badge/%F0%9F%A7%AA_tested-snippet-lightgreen.svg?style=flat-square"></a>
 ////
 //// ```gleam
 //// import dream_opensearch/client.{type Client, type OpenSearchError}
@@ -56,6 +56,7 @@
 //// Every function returns `OpenSearchError` for a failure. Match on its
 //// variants to decide what to do, and use `describe_error` for a log line.
 
+import dream_errors
 import dream_http_client/client as http_client
 import gleam/bit_array
 import gleam/http
@@ -154,7 +155,7 @@ pub type OpenSearchError {
 ///
 /// ## Example
 ///
-/// ### Create a client <a href="https://github.com/TrustBound/dream_opensearch/blob/4.0.0/test/snippets/doc_client_new.gleam#L3-L11"><img align="right" alt="Tested snippet" src="https://img.shields.io/badge/%F0%9F%A7%AA_tested-snippet-lightgreen.svg?style=flat-square"></a>
+/// ### Create a client <a href="https://github.com/TrustBound/dream_opensearch/blob/4.1.0/test/snippets/doc_client_new.gleam#L3-L11"><img align="right" alt="Tested snippet" src="https://img.shields.io/badge/%F0%9F%A7%AA_tested-snippet-lightgreen.svg?style=flat-square"></a>
 ///
 /// ```gleam
 /// import dream_opensearch/client.{type Client, type OpenSearchError}
@@ -213,7 +214,7 @@ pub fn new(base_url: String) -> Result(Client, OpenSearchError) {
 ///
 /// ## Example
 ///
-/// ### Create a client with a timeout and a recorder <a href="https://github.com/TrustBound/dream_opensearch/blob/4.0.0/test/snippets/doc_client_from_request.gleam#L3-L16"><img align="right" alt="Tested snippet" src="https://img.shields.io/badge/%F0%9F%A7%AA_tested-snippet-lightgreen.svg?style=flat-square"></a>
+/// ### Create a client with a timeout and a recorder <a href="https://github.com/TrustBound/dream_opensearch/blob/4.1.0/test/snippets/doc_client_from_request.gleam#L3-L16"><img align="right" alt="Tested snippet" src="https://img.shields.io/badge/%F0%9F%A7%AA_tested-snippet-lightgreen.svg?style=flat-square"></a>
 ///
 /// ```gleam
 /// import dream_http_client/client as http_client
@@ -249,7 +250,7 @@ pub fn from_request(base: http_client.ClientRequest) -> Client {
 ///
 /// ## Example
 ///
-/// ### Read the host of a client <a href="https://github.com/TrustBound/dream_opensearch/blob/4.0.0/test/snippets/doc_client_base_request.gleam#L3-L8"><img align="right" alt="Tested snippet" src="https://img.shields.io/badge/%F0%9F%A7%AA_tested-snippet-lightgreen.svg?style=flat-square"></a>
+/// ### Read the host of a client <a href="https://github.com/TrustBound/dream_opensearch/blob/4.1.0/test/snippets/doc_client_base_request.gleam#L3-L8"><img align="right" alt="Tested snippet" src="https://img.shields.io/badge/%F0%9F%A7%AA_tested-snippet-lightgreen.svg?style=flat-square"></a>
 ///
 /// ```gleam
 /// import dream_http_client/client as http_client
@@ -319,7 +320,7 @@ pub fn base_request(client: Client) -> http_client.ClientRequest {
 ///
 /// ## Example
 ///
-/// ### Get a document <a href="https://github.com/TrustBound/dream_opensearch/blob/4.0.0/test/snippets/doc_client_send_request.gleam#L3-L11"><img align="right" alt="Tested snippet" src="https://img.shields.io/badge/%F0%9F%A7%AA_tested-snippet-lightgreen.svg?style=flat-square"></a>
+/// ### Get a document <a href="https://github.com/TrustBound/dream_opensearch/blob/4.1.0/test/snippets/doc_client_send_request.gleam#L3-L11"><img align="right" alt="Tested snippet" src="https://img.shields.io/badge/%F0%9F%A7%AA_tested-snippet-lightgreen.svg?style=flat-square"></a>
 ///
 /// ```gleam
 /// import dream_opensearch/client.{type Client, type OpenSearchError}
@@ -362,7 +363,7 @@ pub fn send_request(
 ///
 /// ## Example
 ///
-/// ### Log an error <a href="https://github.com/TrustBound/dream_opensearch/blob/4.0.0/test/snippets/doc_client_describe_error.gleam#L3-L11"><img align="right" alt="Tested snippet" src="https://img.shields.io/badge/%F0%9F%A7%AA_tested-snippet-lightgreen.svg?style=flat-square"></a>
+/// ### Log an error <a href="https://github.com/TrustBound/dream_opensearch/blob/4.1.0/test/snippets/doc_client_describe_error.gleam#L3-L11"><img align="right" alt="Tested snippet" src="https://img.shields.io/badge/%F0%9F%A7%AA_tested-snippet-lightgreen.svg?style=flat-square"></a>
 ///
 /// ```gleam
 /// import dream_opensearch/client.{type Client}
@@ -392,6 +393,56 @@ pub fn describe_error(error: OpenSearchError) -> String {
       <> ")"
     NoRecording(details:, ..) ->
       "No recording for the OpenSearch request: " <> details
+  }
+}
+
+/// Map an error to the shared error of the Dream packages
+///
+/// Gives a `dream_errors.Error`, the error type that the Dream packages
+/// share, and keeps the `OpenSearchError` as the cause. The message is the
+/// text of `describe_error`: text for developers and logs, not for the
+/// users of an app.
+///
+/// ## Returns
+///
+/// - `InvalidUrl`: `Invalid`
+/// - `Unavailable`: `Unavailable`
+/// - `TimedOut`: `Timeout`
+/// - `Rejected` with status 404: `NotFound`. `NotFound` has no cause, so
+///   the message holds the status and the body.
+/// - `Rejected` with status 409: `Conflict`
+/// - `Rejected` with another status, `InvalidResponseBody` and
+///   `NoRecording`: `Failed`
+///
+/// ## Example
+///
+/// ### Read a document with the shared error <a href="https://github.com/TrustBound/dream_opensearch/blob/4.1.0/test/snippets/doc_client_to_error.gleam#L3-L15"><img align="right" alt="Tested snippet" src="https://img.shields.io/badge/%F0%9F%A7%AA_tested-snippet-lightgreen.svg?style=flat-square"></a>
+///
+/// ```gleam
+/// import dream_errors
+/// import dream_opensearch/client.{type Client, type OpenSearchError}
+/// import gleam/http
+/// import gleam/result
+///
+/// pub fn get_document(
+///   opensearch: Client,
+///   index: String,
+///   id: String,
+/// ) -> Result(String, dream_errors.Error(OpenSearchError)) {
+///   client.send_request(opensearch, http.Get, "/" <> index <> "/_doc/" <> id, "")
+///   |> result.map_error(client.to_error)
+/// }
+/// ```
+pub fn to_error(error: OpenSearchError) -> dream_errors.Error(OpenSearchError) {
+  let message = describe_error(error)
+  case error {
+    InvalidUrl(..) -> dream_errors.Invalid(message, error)
+    Unavailable(..) -> dream_errors.Unavailable(message, error)
+    TimedOut(..) -> dream_errors.Timeout(message, error)
+    Rejected(status: 404, ..) -> dream_errors.NotFound(message)
+    Rejected(status: 409, ..) -> dream_errors.Conflict(message, error)
+    Rejected(..) | InvalidResponseBody(..) | NoRecording(..) ->
+      dream_errors.Failed(message, error)
   }
 }
 
