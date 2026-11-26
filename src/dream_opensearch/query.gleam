@@ -66,7 +66,7 @@
 //// }
 //// ```
 
-import gleam/json
+import gleam/json.{object, string, to_string}
 
 /// Build a match_all query
 ///
@@ -100,8 +100,8 @@ import gleam/json
 /// }
 /// ```
 pub fn match_all() -> String {
-  json.object([#("query", json.object([#("match_all", json.object([]))]))])
-  |> json.to_string()
+  object([#("query", object([#("match_all", object([]))]))])
+  |> to_string()
 }
 
 /// Build a simple term query
@@ -143,15 +143,15 @@ pub fn match_all() -> String {
 /// }
 /// ```
 pub fn term(field: String, value: String) -> String {
-  json.object([
+  object([
     #(
       "query",
-      json.object([
-        #("term", json.object([#(field, json.string(value))])),
+      object([
+        #("term", object([#(field, string(value))])),
       ]),
     ),
   ])
-  |> json.to_string()
+  |> to_string()
 }
 
 /// Build a range query
@@ -194,18 +194,18 @@ pub fn term(field: String, value: String) -> String {
 /// }
 /// ```
 pub fn range(field: String, gte: String, lte: String) -> String {
-  json.object([
+  object([
     #(
       "query",
-      json.object([
+      object([
         #(
           "range",
-          json.object([
+          object([
             #(
               field,
-              json.object([
-                #("gte", json.string(gte)),
-                #("lte", json.string(lte)),
+              object([
+                #("gte", string(gte)),
+                #("lte", string(lte)),
               ]),
             ),
           ]),
@@ -213,7 +213,7 @@ pub fn range(field: String, gte: String, lte: String) -> String {
       ]),
     ),
   ])
-  |> json.to_string()
+  |> to_string()
 }
 
 /// Build a match query (full-text search)
@@ -255,13 +255,13 @@ pub fn range(field: String, gte: String, lte: String) -> String {
 /// }
 /// ```
 pub fn match(field: String, text: String) -> String {
-  json.object([
+  object([
     #(
       "query",
-      json.object([
-        #("match", json.object([#(field, json.string(text))])),
+      object([
+        #("match", object([#(field, string(text))])),
       ]),
     ),
   ])
-  |> json.to_string()
+  |> to_string()
 }

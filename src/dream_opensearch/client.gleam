@@ -57,15 +57,20 @@
 //// variants to decide what to do, and use `describe_error` for a log line.
 
 import dream_errors.{type Error, Conflict, Failed, Invalid, NotFound, Timeout}
-import dream_http_client/client as http_client
-import gleam/bit_array
-import gleam/http
-import gleam/int
-import gleam/list
-import gleam/option.{type Option, None, Some}
-import gleam/result
-import gleam/string
-import gleam/uri
+import dream_http_client/client.{
+  type ClientRequest, type Header, type HttpResponse, type SendError,
+  type TransportError, ConnectFailed, ConnectionError, Goaway, ProcessDown,
+  RemoteClosed, RequestError, ResponseError, StreamReset, Unexpected, add_header,
+  get_headers, get_path, send, transport_error_to_string,
+} as http_client
+import gleam/bit_array.{base64_encode, from_string}
+import gleam/http.{type Method, type Scheme, Http, Https}
+import gleam/int.{to_string}
+import gleam/list.{filter}
+import gleam/option.{type Option, None, Some, to_result}
+import gleam/result.{map, replace_error, try, unwrap}
+import gleam/string.{drop_end, ends_with, lowercase, split_once}
+import gleam/uri.{type Uri, parse, percent_decode}
 
 /// OpenSearch client configuration
 ///
@@ -76,7 +81,7 @@ import gleam/uri
 /// The type is opaque, so a `Client` always holds a base request that `new`
 /// or `from_request` made.
 pub opaque type Client {
-  Client(base: http_client.ClientRequest)
+  Client(base: ClientRequest)
 }
 
 /// Why an OpenSearch request failed.
@@ -169,15 +174,13 @@ pub type OpenSearchError {
 /// }
 /// ```
 pub fn new(base_url: String) -> Result(Client, OpenSearchError) {
-  use parsed <- result.try(
-    uri.parse(base_url) |> invalid_url("the URL cannot be parsed"),
+  use parsed <- try(parse(base_url) |> invalid_url("the URL cannot be parsed"))
+  use scheme <- try(parse_scheme(parsed.scheme))
+  use host <- try(
+    to_result(parsed.host, Nil) |> invalid_url("the URL has no host"),
   )
-  use scheme <- result.try(parse_scheme(parsed.scheme))
-  use host <- result.try(
-    option.to_result(parsed.host, Nil) |> invalid_url("the URL has no host"),
-  )
-  use Nil <- result.try(reject_query_and_fragment(parsed))
-  use authorization <- result.try(parse_authorization(parsed.userinfo))
+  use Nil <- try(reject_query_and_fragment(parsed))
+  use authorization <- try(parse_authorization(parsed.userinfo))
   http_client.new()
   |> http_client.scheme(scheme)
   |> http_client.host(host)
@@ -232,11 +235,8 @@ pub fn new(base_url: String) -> Result(Client, OpenSearchError) {
 ///   |> client.from_request
 /// }
 /// ```
-pub fn from_request(base: http_client.ClientRequest) -> Client {
-  Client(base: http_client.path(
-    base,
-    trim_trailing_slash(http_client.get_path(base)),
-  ))
+pub fn from_request(base: ClientRequest) -> Client {
+  Client(base: http_client.path(base, trim_trailing_slash(get_path(base))))
 }
 
 /// The base request of a client
@@ -260,7 +260,7 @@ pub fn from_request(base: http_client.ClientRequest) -> Client {
 ///   http_client.get_host(client.base_request(opensearch))
 /// }
 /// ```
-pub fn base_request(client: Client) -> http_client.ClientRequest {
+pub fn base_request(client: Client) -> ClientRequest {
   client.base
 }
 
@@ -335,13 +335,13 @@ pub fn base_request(client: Client) -> http_client.ClientRequest {
 /// ```
 pub fn send_request(
   client: Client,
-  method: http.Method,
+  method: Method,
   path: String,
   body: String,
 ) -> Result(String, OpenSearchError) {
   client.base
   |> build_request(method, path, body)
-  |> http_client.send
+  |> send
   |> response_to_result
 }
 
@@ -381,15 +381,15 @@ pub fn describe_error(error: OpenSearchError) -> String {
     InvalidUrl(reason:) -> "Invalid OpenSearch URL: " <> reason
     Unavailable(reason:) -> "OpenSearch is unavailable: " <> reason
     TimedOut(timeout_ms:) ->
-      "OpenSearch sent no answer within " <> int.to_string(timeout_ms) <> " ms"
+      "OpenSearch sent no answer within " <> to_string(timeout_ms) <> " ms"
     Rejected(status:, body:) ->
       "OpenSearch rejected the request with status "
-      <> int.to_string(status)
+      <> to_string(status)
       <> ": "
       <> body
     InvalidResponseBody(status:) ->
       "The OpenSearch response body is not valid UTF-8 (status "
-      <> int.to_string(status)
+      <> to_string(status)
       <> ")"
     NoRecording(details:, ..) ->
       "No recording for the OpenSearch request: " <> details
@@ -450,20 +450,18 @@ fn invalid_url(
   outcome: Result(value, Nil),
   reason: String,
 ) -> Result(value, OpenSearchError) {
-  result.replace_error(outcome, InvalidUrl(reason:))
+  replace_error(outcome, InvalidUrl(reason:))
 }
 
-fn parse_scheme(
-  scheme: Option(String),
-) -> Result(http.Scheme, OpenSearchError) {
+fn parse_scheme(scheme: Option(String)) -> Result(Scheme, OpenSearchError) {
   case scheme {
-    Some("http") -> Ok(http.Http)
-    Some("https") -> Ok(http.Https)
+    Some("http") -> Ok(Http)
+    Some("https") -> Ok(Https)
     _ -> Error(InvalidUrl(reason: "the URL scheme must be http or https"))
   }
 }
 
-fn reject_query_and_fragment(parsed: uri.Uri) -> Result(Nil, OpenSearchError) {
+fn reject_query_and_fragment(parsed: Uri) -> Result(Nil, OpenSearchError) {
   case parsed.query, parsed.fragment {
     None, None -> Ok(Nil)
     _, _ -> Error(InvalidUrl(reason: "the URL has a query or a fragment"))
@@ -471,8 +469,8 @@ fn reject_query_and_fragment(parsed: uri.Uri) -> Result(Nil, OpenSearchError) {
 }
 
 fn trim_trailing_slash(path: String) -> String {
-  case string.ends_with(path, "/") {
-    True -> string.drop_end(path, 1)
+  case ends_with(path, "/") {
+    True -> drop_end(path, 1)
     False -> path
   }
 }
@@ -485,8 +483,8 @@ fn parse_authorization(
     Some(encoded_userinfo) ->
       encoded_userinfo
       |> decode_credentials
-      |> result.map(basic_authorization)
-      |> result.map(Some)
+      |> map(basic_authorization)
+      |> map(Some)
   }
 }
 
@@ -497,46 +495,40 @@ fn decode_credentials(
   encoded_userinfo: String,
 ) -> Result(#(String, String), OpenSearchError) {
   let #(encoded_user, encoded_password) =
-    string.split_once(encoded_userinfo, on: ":")
-    |> result.unwrap(#(encoded_userinfo, ""))
+    split_once(encoded_userinfo, on: ":")
+    |> unwrap(#(encoded_userinfo, ""))
   let invalid_encoding =
     "the user name or password has invalid percent-encoding"
-  use user <- result.try(
-    uri.percent_decode(encoded_user) |> invalid_url(invalid_encoding),
-  )
-  use password <- result.try(
-    uri.percent_decode(encoded_password) |> invalid_url(invalid_encoding),
+  use user <- try(percent_decode(encoded_user) |> invalid_url(invalid_encoding))
+  use password <- try(
+    percent_decode(encoded_password) |> invalid_url(invalid_encoding),
   )
   Ok(#(user, password))
 }
 
 fn basic_authorization(credentials: #(String, String)) -> String {
   let #(user, password) = credentials
-  "Basic "
-  <> bit_array.base64_encode(
-    bit_array.from_string(user <> ":" <> password),
-    True,
-  )
+  "Basic " <> base64_encode(from_string(user <> ":" <> password), True)
 }
 
 fn build_request(
-  base: http_client.ClientRequest,
-  method: http.Method,
+  base: ClientRequest,
+  method: Method,
   path: String,
   body: String,
-) -> http_client.ClientRequest {
+) -> ClientRequest {
   let #(api_path, query) = split_query(path)
   base
   |> http_client.method(method)
-  |> http_client.path(root_if_empty(http_client.get_path(base) <> api_path))
+  |> http_client.path(root_if_empty(get_path(base) <> api_path))
   |> add_query(query)
-  |> http_client.headers(without_content_type(http_client.get_headers(base)))
-  |> http_client.add_header("content-type", "application/json")
+  |> http_client.headers(without_content_type(get_headers(base)))
+  |> add_header("content-type", "application/json")
   |> http_client.body(body)
 }
 
 fn split_query(path: String) -> #(String, Option(String)) {
-  case string.split_once(path, on: "?") {
+  case split_once(path, on: "?") {
     Ok(#(api_path, query)) -> #(api_path, Some(query))
     Error(Nil) -> #(path, None)
   }
@@ -549,28 +541,18 @@ fn root_if_empty(path: String) -> String {
   }
 }
 
-fn without_content_type(
-  headers: List(http_client.Header),
-) -> List(http_client.Header) {
-  list.filter(headers, fn(header) {
-    string.lowercase(header.name) != "content-type"
-  })
+fn without_content_type(headers: List(Header)) -> List(Header) {
+  filter(headers, fn(header) { lowercase(header.name) != "content-type" })
 }
 
-fn add_port(
-  request: http_client.ClientRequest,
-  port: Option(Int),
-) -> http_client.ClientRequest {
+fn add_port(request: ClientRequest, port: Option(Int)) -> ClientRequest {
   case port {
     Some(port_value) -> http_client.port(request, port_value)
     None -> request
   }
 }
 
-fn add_query(
-  request: http_client.ClientRequest,
-  query: Option(String),
-) -> http_client.ClientRequest {
+fn add_query(request: ClientRequest, query: Option(String)) -> ClientRequest {
   case query {
     Some(query_value) -> http_client.query(request, query_value)
     None -> request
@@ -578,24 +560,23 @@ fn add_query(
 }
 
 fn add_authorization(
-  request: http_client.ClientRequest,
+  request: ClientRequest,
   authorization: Option(String),
-) -> http_client.ClientRequest {
+) -> ClientRequest {
   case authorization {
-    Some(header_value) ->
-      http_client.add_header(request, "authorization", header_value)
+    Some(header_value) -> add_header(request, "authorization", header_value)
     None -> request
   }
 }
 
 fn response_to_result(
-  response: Result(http_client.HttpResponse, http_client.SendError),
+  response: Result(HttpResponse, SendError),
 ) -> Result(String, OpenSearchError) {
   case response {
     Ok(response) -> body_text(response)
-    Error(http_client.ResponseError(response: response)) ->
-      body_text(response) |> result.try(rejected(response.status, _))
-    Error(http_client.RequestError(error: transport_error)) ->
+    Error(ResponseError(response: response)) ->
+      body_text(response) |> try(rejected(response.status, _))
+    Error(RequestError(error: transport_error)) ->
       Error(from_transport_error(transport_error))
   }
 }
@@ -606,31 +587,24 @@ fn rejected(status: Int, body: String) -> Result(String, OpenSearchError) {
 
 // OpenSearch answers with JSON, which is UTF-8. A body that is not UTF-8 has
 // no text form, so it is an error.
-fn body_text(
-  response: http_client.HttpResponse,
-) -> Result(String, OpenSearchError) {
+fn body_text(response: HttpResponse) -> Result(String, OpenSearchError) {
   http_client.body_text(response)
-  |> result.replace_error(InvalidResponseBody(status: response.status))
+  |> replace_error(InvalidResponseBody(status: response.status))
 }
 
 // Each variant of `http_client.TransportError` is named, with no catch-all,
 // so a new variant in dream_http_client is a compile error here.
-fn from_transport_error(error: http_client.TransportError) -> OpenSearchError {
+fn from_transport_error(error: TransportError) -> OpenSearchError {
   case error {
     http_client.TimedOut(timeout_ms:) -> TimedOut(timeout_ms:)
     http_client.NoRecording(method:, url:, ..) ->
-      NoRecording(
-        method:,
-        url:,
-        details: http_client.transport_error_to_string(error),
-      )
-    http_client.ConnectFailed(..)
-    | http_client.RemoteClosed
-    | http_client.StreamReset(..)
-    | http_client.Goaway(..)
-    | http_client.ConnectionError(..)
-    | http_client.ProcessDown(..)
-    | http_client.Unexpected(..) ->
-      Unavailable(reason: http_client.transport_error_to_string(error))
+      NoRecording(method:, url:, details: transport_error_to_string(error))
+    ConnectFailed(..)
+    | RemoteClosed
+    | StreamReset(..)
+    | Goaway(..)
+    | ConnectionError(..)
+    | ProcessDown(..)
+    | Unexpected(..) -> Unavailable(reason: transport_error_to_string(error))
   }
 }

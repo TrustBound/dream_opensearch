@@ -5,37 +5,42 @@
 //// own index from `opensearch_cluster.with_index` and deletes it at the end.
 //// The tests check what each example stores, finds or returns.
 
-import dream_opensearch/client.{type Client}
-import dream_opensearch/document
+import dream_opensearch/client.{type Client, type OpenSearchError, send_request}
+import dream_opensearch/document.{create_index}
 import dream_test/matchers.{be_equal, or_fail_with, should}
 import dream_test/suite.{type TestSuite}
 import dream_test/unit.{describe, group, it}
-import gleam/dynamic/decode
-import gleam/http
+import gleam/dynamic/decode.{at, bool, subfield, success}
+import gleam/http.{Get}
 import gleam/int.{to_string}
-import gleam/json
-import gleam/list
-import gleam/result
-import gleam/string
-import opensearch_cluster.{client_for}
+import gleam/json.{parse}
+import gleam/list.{sort, try_map}
+import gleam/result.{map, map_error, replace_error, try}
+import gleam/string.{compare, replace}
+import opensearch_cluster.{
+  as_text, base_url_of, client_for, error_type_and_status, refresh,
+  rejected_body, with_index,
+}
 import opensearch_test_server.{unused_port}
 import snippets/doc_client_describe_error.{health_line}
-import snippets/doc_client_new
+import snippets/doc_client_new.{
+  create_client_with_credentials, create_local_client,
+}
 import snippets/doc_client_quick_start
-import snippets/doc_client_send_request
-import snippets/doc_document_bulk
-import snippets/doc_document_create_index
-import snippets/doc_document_delete
-import snippets/doc_document_delete_index
+import snippets/doc_client_send_request.{get_user}
+import snippets/doc_document_bulk.{bulk_index_users}
+import snippets/doc_document_create_index.{create_users_index}
+import snippets/doc_document_delete.{delete_user}
+import snippets/doc_document_delete_index.{delete_old_index}
 import snippets/doc_document_index
 import snippets/doc_document_quick_start
-import snippets/doc_document_search
-import snippets/doc_query_custom
-import snippets/doc_query_match
-import snippets/doc_query_match_all
-import snippets/doc_query_quick_start
-import snippets/doc_query_range
-import snippets/doc_query_term
+import snippets/doc_document_search.{search_for_alice}
+import snippets/doc_query_custom.{build_bool_query}
+import snippets/doc_query_match.{search_users_named_alice}
+import snippets/doc_query_match_all.{search_all_users}
+import snippets/doc_query_quick_start.{search_by_name, search_by_status}
+import snippets/doc_query_range.{search_products_by_price}
+import snippets/doc_query_term.{search_active_users}
 
 /// Alice, active, and Bob, inactive, as users 1 and 2.
 const users = [
@@ -62,13 +67,13 @@ fn load(
   index: String,
   documents: List(#(String, String)),
 ) -> Result(Nil, String) {
-  use _ <- result.try(
-    list.try_map(documents, fn(entry) {
+  use _ <- try(
+    try_map(documents, fn(entry) {
       document.index(opensearch, index, entry.0, entry.1)
     })
-    |> opensearch_cluster.as_text,
+    |> as_text,
   )
-  opensearch_cluster.refresh(opensearch, index)
+  refresh(opensearch, index)
 }
 
 /// Runs `search` on a new index with `documents`, and returns the IDs of the
@@ -76,19 +81,14 @@ fn load(
 fn found_ids(
   prefix: String,
   documents: List(#(String, String)),
-  search: fn(Client, String) -> Result(String, client.OpenSearchError),
+  search: fn(Client, String) -> Result(String, OpenSearchError),
 ) -> Result(List(String), String) {
-  use opensearch, index <- opensearch_cluster.with_index(prefix)
-  use Nil <- result.try(load(opensearch, index, documents))
-  use body <- result.try(
-    search(opensearch, index) |> opensearch_cluster.as_text,
-  )
-  json.parse(
-    body,
-    decode.at(["hits", "hits"], decode.list(decode.at(["_id"], decode.string))),
-  )
-  |> result.map(list.sort(_, string.compare))
-  |> result.replace_error("Unexpected search response: " <> body)
+  use opensearch, index <- with_index(prefix)
+  use Nil <- try(load(opensearch, index, documents))
+  use body <- try(search(opensearch, index) |> as_text)
+  parse(body, at(["hits", "hits"], decode.list(at(["_id"], decode.string))))
+  |> map(sort(_, compare))
+  |> replace_error("Unexpected search response: " <> body)
 }
 
 /// The value of the field `field` in the `_source` of document 123 of
@@ -98,18 +98,18 @@ fn stored_field(
   index: String,
   field: String,
 ) -> Result(String, String) {
-  use body <- result.try(
-    client.send_request(opensearch, http.Get, "/" <> index <> "/_doc/123", "")
-    |> opensearch_cluster.as_text,
+  use body <- try(
+    send_request(opensearch, Get, "/" <> index <> "/_doc/123", "")
+    |> as_text,
   )
-  json.parse(body, decode.at(["_source", field], decode.string))
-  |> result.replace_error("Unexpected document: " <> body)
+  parse(body, at(["_source", field], decode.string))
+  |> replace_error("Unexpected document: " <> body)
 }
 
 /// The `result` field of an index or delete response.
 fn result_field(body: String) -> Result(String, String) {
-  json.parse(body, decode.at(["result"], decode.string))
-  |> result.replace_error("Unexpected response: " <> body)
+  parse(body, at(["result"], decode.string))
+  |> replace_error("Unexpected response: " <> body)
 }
 
 pub fn tests() -> TestSuite {
@@ -121,7 +121,7 @@ pub fn tests() -> TestSuite {
 
         // Assert
         opensearch
-        |> result.map(opensearch_cluster.base_url_of)
+        |> map(base_url_of)
         |> should
         |> be_equal(Ok("http://localhost:9200"))
         |> or_fail_with("create client uses localhost 9200")
@@ -129,13 +129,13 @@ pub fn tests() -> TestSuite {
       it("index alice creates the document 123 with her name", fn() {
         // Act
         let stored = {
-          use opensearch, index <- opensearch_cluster.with_index("users")
-          use body <- result.try(
+          use opensearch, index <- with_index("users")
+          use body <- try(
             doc_client_quick_start.index_alice(opensearch, index)
-            |> opensearch_cluster.as_text,
+            |> as_text,
           )
-          use outcome <- result.try(result_field(body))
-          use name <- result.try(stored_field(opensearch, index, "name"))
+          use outcome <- try(result_field(body))
+          use name <- try(stored_field(opensearch, index, "name"))
           Ok(#(outcome, name))
         }
 
@@ -180,22 +180,22 @@ pub fn tests() -> TestSuite {
     group("client.new", [
       it("create local client uses localhost 9200", fn() {
         // Act
-        let opensearch = doc_client_new.create_local_client()
+        let opensearch = create_local_client()
 
         // Assert
         opensearch
-        |> result.map(opensearch_cluster.base_url_of)
+        |> map(base_url_of)
         |> should
         |> be_equal(Ok("http://localhost:9200"))
         |> or_fail_with("create local client uses localhost 9200")
       }),
       it("create client with credentials keeps the url", fn() {
         // Act
-        let opensearch = doc_client_new.create_client_with_credentials()
+        let opensearch = create_client_with_credentials()
 
         // Assert
         opensearch
-        |> result.map(opensearch_cluster.base_url_of)
+        |> map(base_url_of)
         |> should
         |> be_equal(Ok("https://search.example.com:9200"))
         |> or_fail_with("create client with credentials keeps the url")
@@ -205,22 +205,22 @@ pub fn tests() -> TestSuite {
       it("get user returns the stored document", fn() {
         // Act
         let fetched = {
-          use opensearch, index <- opensearch_cluster.with_index("users")
-          use _ <- result.try(
+          use opensearch, index <- with_index("users")
+          use _ <- try(
             document.index(opensearch, index, "123", "{\"name\":\"Alice\"}")
-            |> opensearch_cluster.as_text,
+            |> as_text,
           )
-          use body <- result.try(
-            doc_client_send_request.get_user(opensearch, index)
-            |> opensearch_cluster.as_text,
+          use body <- try(
+            get_user(opensearch, index)
+            |> as_text,
           )
           let decoder = {
-            use found <- decode.field("found", decode.bool)
-            use name <- decode.subfield(["_source", "name"], decode.string)
-            decode.success(#(found, name))
+            use found <- decode.field("found", bool)
+            use name <- subfield(["_source", "name"], decode.string)
+            success(#(found, name))
           }
-          json.parse(body, decoder)
-          |> result.replace_error("Unexpected document: " <> body)
+          parse(body, decoder)
+          |> replace_error("Unexpected document: " <> body)
         }
 
         // Assert
@@ -232,14 +232,14 @@ pub fn tests() -> TestSuite {
       it("get user of a missing document is a 404 with found false", fn() {
         // Act
         let fetched = {
-          use opensearch, index <- opensearch_cluster.with_index("users")
-          use _ <- result.try(
-            document.create_index(opensearch, index, "{}")
-            |> opensearch_cluster.as_text,
+          use opensearch, index <- with_index("users")
+          use _ <- try(
+            create_index(opensearch, index, "{}")
+            |> as_text,
           )
-          doc_client_send_request.get_user(opensearch, index)
-          |> opensearch_cluster.rejected_body
-          |> result.map_error(json.parse(_, decode.at(["found"], decode.bool)))
+          get_user(opensearch, index)
+          |> rejected_body
+          |> map_error(parse(_, at(["found"], bool)))
           |> Ok
         }
 
@@ -257,7 +257,7 @@ pub fn tests() -> TestSuite {
 
         // Assert
         opensearch
-        |> result.map(opensearch_cluster.base_url_of)
+        |> map(base_url_of)
         |> should
         |> be_equal(Ok("http://localhost:9200"))
         |> or_fail_with("create client uses localhost 9200")
@@ -265,10 +265,10 @@ pub fn tests() -> TestSuite {
       it("index alice stores her email", fn() {
         // Act
         let stored = {
-          use opensearch, index <- opensearch_cluster.with_index("users")
-          use _ <- result.try(
+          use opensearch, index <- with_index("users")
+          use _ <- try(
             doc_document_quick_start.index_alice(opensearch, index)
-            |> opensearch_cluster.as_text,
+            |> as_text,
           )
           stored_field(opensearch, index, "email")
         }
@@ -284,7 +284,7 @@ pub fn tests() -> TestSuite {
       it("index alice reports success", fn() {
         // Act
         let reported = {
-          use opensearch, index <- opensearch_cluster.with_index("users")
+          use opensearch, index <- with_index("users")
           Ok(doc_document_index.index_alice(opensearch, index))
         }
 
@@ -311,8 +311,7 @@ pub fn tests() -> TestSuite {
     group("document.search", [
       it("search for alice finds her", fn() {
         // Act
-        let found =
-          found_ids("users", users, doc_document_search.search_for_alice)
+        let found = found_ids("users", users, search_for_alice)
 
         // Assert
         found
@@ -323,9 +322,9 @@ pub fn tests() -> TestSuite {
       it("search for alice in a missing index is a 404", fn() {
         // Act
         let found = {
-          use opensearch, index <- opensearch_cluster.with_index("users")
-          doc_document_search.search_for_alice(opensearch, index)
-          |> result.map_error(opensearch_cluster.error_type_and_status)
+          use opensearch, index <- with_index("users")
+          search_for_alice(opensearch, index)
+          |> map_error(error_type_and_status)
           |> Ok
         }
 
@@ -340,12 +339,12 @@ pub fn tests() -> TestSuite {
       it("delete user reports success", fn() {
         // Act
         let reported = {
-          use opensearch, index <- opensearch_cluster.with_index("users")
-          use _ <- result.try(
+          use opensearch, index <- with_index("users")
+          use _ <- try(
             document.index(opensearch, index, "123", "{\"name\":\"Alice\"}")
-            |> opensearch_cluster.as_text,
+            |> as_text,
           )
-          Ok(doc_document_delete.delete_user(opensearch, index))
+          Ok(delete_user(opensearch, index))
         }
 
         // Assert
@@ -357,14 +356,14 @@ pub fn tests() -> TestSuite {
       it("delete user reports the 404 body of a missing document", fn() {
         // Act
         let reported = {
-          use opensearch, index <- opensearch_cluster.with_index("users")
-          use _ <- result.try(
-            document.create_index(opensearch, index, "{}")
-            |> opensearch_cluster.as_text,
+          use opensearch, index <- with_index("users")
+          use _ <- try(
+            create_index(opensearch, index, "{}")
+            |> as_text,
           )
           // The index name varies, so put the name of the example in its place
-          doc_document_delete.delete_user(opensearch, index)
-          |> string.replace(index, "users")
+          delete_user(opensearch, index)
+          |> replace(index, "users")
           |> Ok
         }
 
@@ -381,11 +380,11 @@ pub fn tests() -> TestSuite {
       it("create users index answers acknowledged", fn() {
         // Act
         let created = {
-          use opensearch, index <- opensearch_cluster.with_index("users")
+          use opensearch, index <- with_index("users")
           // The index name varies, so put the name of the example in its place
-          doc_document_create_index.create_users_index(opensearch, index)
-          |> result.map(string.replace(_, index, "users"))
-          |> opensearch_cluster.as_text
+          create_users_index(opensearch, index)
+          |> map(replace(_, index, "users"))
+          |> as_text
         }
 
         // Assert
@@ -399,28 +398,23 @@ pub fn tests() -> TestSuite {
       it("create users index maps the email as a keyword", fn() {
         // Act
         let mapped = {
-          use opensearch, index <- opensearch_cluster.with_index("users")
-          use _ <- result.try(
-            doc_document_create_index.create_users_index(opensearch, index)
-            |> opensearch_cluster.as_text,
+          use opensearch, index <- with_index("users")
+          use _ <- try(
+            create_users_index(opensearch, index)
+            |> as_text,
           )
-          use body <- result.try(
-            client.send_request(
-              opensearch,
-              http.Get,
-              "/" <> index <> "/_mapping",
-              "",
-            )
-            |> opensearch_cluster.as_text,
+          use body <- try(
+            send_request(opensearch, Get, "/" <> index <> "/_mapping", "")
+            |> as_text,
           )
-          json.parse(
+          parse(
             body,
-            decode.at(
+            at(
               [index, "mappings", "properties", "email", "type"],
               decode.string,
             ),
           )
-          |> result.replace_error("Unexpected mapping: " <> body)
+          |> replace_error("Unexpected mapping: " <> body)
         }
 
         // Assert
@@ -432,13 +426,13 @@ pub fn tests() -> TestSuite {
       it("create users index of an existing index is a 400", fn() {
         // Act
         let created = {
-          use opensearch, index <- opensearch_cluster.with_index("users")
-          use _ <- result.try(
-            doc_document_create_index.create_users_index(opensearch, index)
-            |> opensearch_cluster.as_text,
+          use opensearch, index <- with_index("users")
+          use _ <- try(
+            create_users_index(opensearch, index)
+            |> as_text,
           )
-          doc_document_create_index.create_users_index(opensearch, index)
-          |> result.map_error(opensearch_cluster.error_type_and_status)
+          create_users_index(opensearch, index)
+          |> map_error(error_type_and_status)
           |> Ok
         }
 
@@ -453,12 +447,12 @@ pub fn tests() -> TestSuite {
       it("delete old index reports success", fn() {
         // Act
         let reported = {
-          use opensearch, index <- opensearch_cluster.with_index("old_index")
-          use _ <- result.try(
-            document.create_index(opensearch, index, "{}")
-            |> opensearch_cluster.as_text,
+          use opensearch, index <- with_index("old_index")
+          use _ <- try(
+            create_index(opensearch, index, "{}")
+            |> as_text,
           )
-          Ok(doc_document_delete_index.delete_old_index(opensearch, index))
+          Ok(delete_old_index(opensearch, index))
         }
 
         // Assert
@@ -470,10 +464,10 @@ pub fn tests() -> TestSuite {
       it("delete old index reports the 404 body of a missing index", fn() {
         // Act
         let reported = {
-          use opensearch, index <- opensearch_cluster.with_index("old_index")
+          use opensearch, index <- with_index("old_index")
           // The index name varies, so put the name of the example in its place
-          doc_document_delete_index.delete_old_index(opensearch, index)
-          |> string.replace(index, "old_index")
+          delete_old_index(opensearch, index)
+          |> replace(index, "old_index")
           |> Ok
         }
 
@@ -490,28 +484,23 @@ pub fn tests() -> TestSuite {
       it("bulk index users stores both users with no errors", fn() {
         // Act
         let loaded = {
-          use opensearch, index <- opensearch_cluster.with_index("users")
-          use body <- result.try(
-            doc_document_bulk.bulk_index_users(opensearch, index)
-            |> opensearch_cluster.as_text,
+          use opensearch, index <- with_index("users")
+          use body <- try(
+            bulk_index_users(opensearch, index)
+            |> as_text,
           )
-          use errors <- result.try(
-            json.parse(body, decode.at(["errors"], decode.bool))
-            |> result.replace_error("Unexpected bulk response: " <> body),
+          use errors <- try(
+            parse(body, at(["errors"], bool))
+            |> replace_error("Unexpected bulk response: " <> body),
           )
-          use Nil <- result.try(opensearch_cluster.refresh(opensearch, index))
-          use counted <- result.try(
-            client.send_request(
-              opensearch,
-              http.Get,
-              "/" <> index <> "/_count",
-              "",
-            )
-            |> opensearch_cluster.as_text,
+          use Nil <- try(refresh(opensearch, index))
+          use counted <- try(
+            send_request(opensearch, Get, "/" <> index <> "/_count", "")
+            |> as_text,
           )
-          json.parse(counted, decode.at(["count"], decode.int))
-          |> result.map(fn(count) { #(errors, count) })
-          |> result.replace_error("Unexpected count response: " <> counted)
+          parse(counted, at(["count"], decode.int))
+          |> map(fn(count) { #(errors, count) })
+          |> replace_error("Unexpected count response: " <> counted)
         }
 
         // Assert
@@ -524,8 +513,7 @@ pub fn tests() -> TestSuite {
     group("query module: quick start", [
       it("search by name finds Alice", fn() {
         // Act
-        let found =
-          found_ids("users", users, doc_query_quick_start.search_by_name)
+        let found = found_ids("users", users, search_by_name)
 
         // Assert
         found
@@ -535,8 +523,7 @@ pub fn tests() -> TestSuite {
       }),
       it("search by status finds the active user", fn() {
         // Act
-        let found =
-          found_ids("users", users, doc_query_quick_start.search_by_status)
+        let found = found_ids("users", users, search_by_status)
 
         // Assert
         found
@@ -548,7 +535,7 @@ pub fn tests() -> TestSuite {
     group("query module: custom query", [
       it("build bool query returns the bool query json", fn() {
         // Act
-        let query_json = doc_query_custom.build_bool_query()
+        let query_json = build_bool_query()
 
         // Assert
         query_json
@@ -562,11 +549,7 @@ pub fn tests() -> TestSuite {
         // Act
         let found =
           found_ids("users", users, fn(opensearch, index) {
-            document.search(
-              opensearch,
-              index,
-              doc_query_custom.build_bool_query(),
-            )
+            document.search(opensearch, index, build_bool_query())
           })
 
         // Assert
@@ -579,8 +562,7 @@ pub fn tests() -> TestSuite {
     group("query.match_all", [
       it("search all users finds every user", fn() {
         // Act
-        let found =
-          found_ids("users", users, doc_query_match_all.search_all_users)
+        let found = found_ids("users", users, search_all_users)
 
         // Assert
         found
@@ -592,8 +574,7 @@ pub fn tests() -> TestSuite {
     group("query.term", [
       it("search active users finds the active user", fn() {
         // Act
-        let found =
-          found_ids("users", users, doc_query_term.search_active_users)
+        let found = found_ids("users", users, search_active_users)
 
         // Assert
         found
@@ -605,12 +586,7 @@ pub fn tests() -> TestSuite {
     group("query.range", [
       it("search products by price finds the product at 50", fn() {
         // Act
-        let found =
-          found_ids(
-            "products",
-            products,
-            doc_query_range.search_products_by_price,
-          )
+        let found = found_ids("products", products, search_products_by_price)
 
         // Assert
         found
@@ -622,8 +598,7 @@ pub fn tests() -> TestSuite {
     group("query.match", [
       it("search users named alice finds Alice", fn() {
         // Act
-        let found =
-          found_ids("users", users, doc_query_match.search_users_named_alice)
+        let found = found_ids("users", users, search_users_named_alice)
 
         // Assert
         found

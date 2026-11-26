@@ -11,27 +11,37 @@
 //// UTF-8, and a TLS handshake.
 
 import dream_errors.{Conflict, Failed, Invalid, NotFound, Timeout}
-import dream_http_client/client as http_client
-import dream_http_client/recorder
+import dream_http_client/client.{
+  type ClientRequest, Header, add_header, get_headers, get_host, get_path, host,
+  path, query, scheme, timeout,
+} as http_client
+import dream_http_client/recorder.{Playback, stop}
 import dream_opensearch/client.{
-  InvalidResponseBody, InvalidUrl, NoRecording, Rejected, TimedOut, Unavailable,
+  type Client, InvalidResponseBody, InvalidUrl, NoRecording, Rejected, TimedOut,
+  Unavailable, base_request, describe_error, from_request, send_request,
   to_error,
 }
-import dream_opensearch/document.{create_index}
+import dream_opensearch/document.{create_index, delete_index}
 import dream_test/matchers.{be_equal, or_fail_with, should}
 import dream_test/suite.{type TestSuite}
 import dream_test/unit.{describe, group, it}
-import gleam/bit_array
-import gleam/dynamic/decode
-import gleam/http
-import gleam/int
-import gleam/json
-import gleam/list
+import gleam/bit_array.{slice}
+import gleam/dynamic/decode.{at, bool}
+import gleam/http.{Delete, Get, Http, Patch, Post, Put}
+import gleam/int.{to_string}
+import gleam/json.{parse}
+import gleam/list.{map}
 import gleam/result
-import gleam/string.{inspect, replace}
-import opensearch_cluster.{as_text, with_index}
+import gleam/string.{inspect, repeat, replace}
+import opensearch_cluster.{
+  as_text, base_url_of, client_for, error_type_and_status, recorded_client,
+  recorder_mode, rejected_body, with_index,
+}
 import opensearch_test_server.{
   type TestServer, CaptureRawBytes, HoldWithoutAnswer, Respond, RespondBytes,
+  await_raw_bytes, await_request, base_url, base_url_with_userinfo,
+  header_values, request_body, request_line, start, unreachable_base_url,
+  unused_port,
 }
 import snippets/doc_client_to_error.{get_document}
 
@@ -45,10 +55,10 @@ const recordings_directory = "test/recordings/client_round_trip"
 const recorded_index = "recorded_books"
 
 /// A base request for the local test server `server`.
-fn local_base(server: TestServer) -> http_client.ClientRequest {
+fn local_base(server: TestServer) -> ClientRequest {
   http_client.new()
-  |> http_client.scheme(http.Http)
-  |> http_client.host("127.0.0.1")
+  |> scheme(Http)
+  |> host("127.0.0.1")
   |> http_client.port(opensearch_test_server.port(server))
 }
 
@@ -56,11 +66,11 @@ fn local_base(server: TestServer) -> http_client.ClientRequest {
 /// Returns the `result` of the index answer, the title of the book and the
 /// `acknowledged` of the delete answer.
 fn recorded_round_trip(
-  opensearch: client.Client,
+  opensearch: Client,
 ) -> Result(#(String, String, Bool), String) {
   use _ <- result.try(
-    document.create_index(opensearch, recorded_index, "{}")
-    |> opensearch_cluster.as_text,
+    create_index(opensearch, recorded_index, "{}")
+    |> as_text,
   )
   use indexed <- result.try(
     document.index(
@@ -69,31 +79,26 @@ fn recorded_round_trip(
       "1",
       "{\"title\":\"Programming Gleam\"}",
     )
-    |> opensearch_cluster.as_text,
+    |> as_text,
   )
   use fetched <- result.try(
-    client.send_request(
-      opensearch,
-      http.Get,
-      "/" <> recorded_index <> "/_doc/1",
-      "",
-    )
-    |> opensearch_cluster.as_text,
+    send_request(opensearch, Get, "/" <> recorded_index <> "/_doc/1", "")
+    |> as_text,
   )
   use deleted <- result.try(
-    document.delete_index(opensearch, recorded_index)
-    |> opensearch_cluster.as_text,
+    delete_index(opensearch, recorded_index)
+    |> as_text,
   )
   use outcome <- result.try(
-    json.parse(indexed, decode.at(["result"], decode.string))
+    parse(indexed, at(["result"], decode.string))
     |> result.replace_error("Unexpected index answer: " <> indexed),
   )
   use title <- result.try(
-    json.parse(fetched, decode.at(["_source", "title"], decode.string))
+    parse(fetched, at(["_source", "title"], decode.string))
     |> result.replace_error("Unexpected document: " <> fetched),
   )
   use acknowledged <- result.try(
-    json.parse(deleted, decode.at(["acknowledged"], decode.bool))
+    parse(deleted, at(["acknowledged"], bool))
     |> result.replace_error("Unexpected delete answer: " <> deleted),
   )
   Ok(#(outcome, title, acknowledged))
@@ -108,7 +113,7 @@ pub fn tests() -> TestSuite {
 
         // Assert
         created
-        |> result.map(opensearch_cluster.base_url_of)
+        |> result.map(base_url_of)
         |> should
         |> be_equal(Ok("http://localhost:9200"))
         |> or_fail_with("new without trailing slash keeps url")
@@ -119,7 +124,7 @@ pub fn tests() -> TestSuite {
 
         // Assert
         created
-        |> result.map(opensearch_cluster.base_url_of)
+        |> result.map(base_url_of)
         |> should
         |> be_equal(Ok("http://localhost:9200"))
         |> or_fail_with("new with trailing slash removes it")
@@ -130,7 +135,7 @@ pub fn tests() -> TestSuite {
 
         // Assert
         created
-        |> result.map(opensearch_cluster.base_url_of)
+        |> result.map(base_url_of)
         |> should
         |> be_equal(Ok("https://search.example.com:9200/opensearch"))
         |> or_fail_with("new keeps the scheme and the path prefix")
@@ -142,17 +147,14 @@ pub fn tests() -> TestSuite {
         // Assert
         created
         |> result.map(fn(opensearch) {
-          let base = client.base_request(opensearch)
-          #(
-            opensearch_cluster.base_url_of(opensearch),
-            http_client.get_headers(base),
-          )
+          let base = base_request(opensearch)
+          #(base_url_of(opensearch), get_headers(base))
         })
         |> should
         |> be_equal(
           Ok(
             #("http://localhost:9200", [
-              http_client.Header("authorization", "Basic dXNlcjpwYXNz"),
+              Header("authorization", "Basic dXNlcjpwYXNz"),
             ]),
           ),
         )
@@ -236,72 +238,72 @@ pub fn tests() -> TestSuite {
     group("from_request", [
       it("keeps the headers of the base request", fn() {
         // Arrange
-        let server = opensearch_test_server.start(Respond(200, "{}"))
+        let server = start(Respond(200, "{}"))
         let opensearch =
           local_base(server)
-          |> http_client.add_header("x-trace", "abc")
-          |> client.from_request
+          |> add_header("x-trace", "abc")
+          |> from_request
 
         // Act
-        let _ = client.send_request(opensearch, http.Get, "/", "")
+        let _ = send_request(opensearch, Get, "/", "")
 
         // Assert
-        opensearch_test_server.await_request(server)
-        |> result.map(opensearch_test_server.header_values(_, "x-trace"))
+        await_request(server)
+        |> result.map(header_values(_, "x-trace"))
         |> should
         |> be_equal(Ok(["abc"]))
         |> or_fail_with("The base header goes with each request")
       }),
       it("replaces a content type of the base request", fn() {
         // Arrange
-        let server = opensearch_test_server.start(Respond(200, "{}"))
+        let server = start(Respond(200, "{}"))
         let opensearch =
           local_base(server)
-          |> http_client.add_header("Content-Type", "text/plain")
-          |> client.from_request
+          |> add_header("Content-Type", "text/plain")
+          |> from_request
 
         // Act
-        let _ = client.send_request(opensearch, http.Get, "/", "")
+        let _ = send_request(opensearch, Get, "/", "")
 
         // Assert
-        opensearch_test_server.await_request(server)
-        |> result.map(opensearch_test_server.header_values(_, "content-type"))
+        await_request(server)
+        |> result.map(header_values(_, "content-type"))
         |> should
         |> be_equal(Ok(["application/json"]))
         |> or_fail_with("Each request is JSON")
       }),
       it("puts the path of the base request before the API path", fn() {
         // Arrange
-        let server = opensearch_test_server.start(Respond(200, "{}"))
+        let server = start(Respond(200, "{}"))
         let opensearch =
           local_base(server)
-          |> http_client.path("/opensearch/")
-          |> client.from_request
+          |> path("/opensearch/")
+          |> from_request
 
         // Act
-        let _ = client.send_request(opensearch, http.Get, "/users/_search", "")
+        let _ = send_request(opensearch, Get, "/users/_search", "")
 
         // Assert
-        opensearch_test_server.await_request(server)
-        |> result.map(opensearch_test_server.request_line)
+        await_request(server)
+        |> result.map(request_line)
         |> should
         |> be_equal(Ok(#("GET", "/opensearch/users/_search")))
         |> or_fail_with("The base path is a prefix")
       }),
       it("keeps the query of the base request for a path with none", fn() {
         // Arrange
-        let server = opensearch_test_server.start(Respond(200, "{}"))
+        let server = start(Respond(200, "{}"))
         let opensearch =
           local_base(server)
-          |> http_client.query("pretty=true")
-          |> client.from_request
+          |> query("pretty=true")
+          |> from_request
 
         // Act
-        let _ = client.send_request(opensearch, http.Get, "/users/_search", "")
+        let _ = send_request(opensearch, Get, "/users/_search", "")
 
         // Assert
-        opensearch_test_server.await_request(server)
-        |> result.map(opensearch_test_server.request_line)
+        await_request(server)
+        |> result.map(request_line)
         |> should
         |> be_equal(Ok(#("GET", "/users/_search?pretty=true")))
         |> or_fail_with("The base query stays")
@@ -310,24 +312,18 @@ pub fn tests() -> TestSuite {
         "replaces the query of the base request with the query of the path",
         fn() {
           // Arrange
-          let server = opensearch_test_server.start(Respond(200, "{}"))
+          let server = start(Respond(200, "{}"))
           let opensearch =
             local_base(server)
-            |> http_client.query("pretty=true")
-            |> client.from_request
+            |> query("pretty=true")
+            |> from_request
 
           // Act
-          let _ =
-            client.send_request(
-              opensearch,
-              http.Get,
-              "/users/_search?size=5",
-              "",
-            )
+          let _ = send_request(opensearch, Get, "/users/_search?size=5", "")
 
           // Assert
-          opensearch_test_server.await_request(server)
-          |> result.map(opensearch_test_server.request_line)
+          await_request(server)
+          |> result.map(request_line)
           |> should
           |> be_equal(Ok(#("GET", "/users/_search?size=5")))
           |> or_fail_with("The query of the path wins")
@@ -335,14 +331,14 @@ pub fn tests() -> TestSuite {
       ),
       it("returns timed out with the timeout of the base request", fn() {
         // Arrange
-        let server = opensearch_test_server.start(HoldWithoutAnswer)
+        let server = start(HoldWithoutAnswer)
         let opensearch =
           local_base(server)
-          |> http_client.timeout(100)
-          |> client.from_request
+          |> timeout(100)
+          |> from_request
 
         // Act
-        let result = client.send_request(opensearch, http.Get, "/", "")
+        let result = send_request(opensearch, Get, "/", "")
 
         // Assert
         result
@@ -354,13 +350,13 @@ pub fn tests() -> TestSuite {
         // Act
         let base =
           http_client.new()
-          |> http_client.host("search.example.com")
-          |> http_client.path("/opensearch/")
-          |> client.from_request
-          |> client.base_request
+          |> host("search.example.com")
+          |> path("/opensearch/")
+          |> from_request
+          |> base_request
 
         // Assert
-        #(http_client.get_host(base), http_client.get_path(base))
+        #(get_host(base), get_path(base))
         |> should
         |> be_equal(#("search.example.com", "/opensearch"))
         |> or_fail_with("The base request comes back")
@@ -370,14 +366,12 @@ pub fn tests() -> TestSuite {
       it("sends a round trip through the recorder", fn() {
         // Act
         let trip = {
-          use #(opensearch, started) <- result.try(
-            opensearch_cluster.recorded_client(
-              recordings_directory,
-              opensearch_cluster.recorder_mode(),
-            ),
-          )
+          use #(opensearch, started) <- result.try(recorded_client(
+            recordings_directory,
+            recorder_mode(),
+          ))
           let outcome = recorded_round_trip(opensearch)
-          use Nil <- result.try(recorder.stop(started))
+          use Nil <- result.try(stop(started))
           outcome
         }
 
@@ -390,15 +384,12 @@ pub fn tests() -> TestSuite {
       it("returns no recording for a request with no recording", fn() {
         // Act
         let missed = {
-          use #(opensearch, started) <- result.try(
-            opensearch_cluster.recorded_client(
-              recordings_directory,
-              recorder.Playback,
-            ),
-          )
-          let outcome =
-            client.send_request(opensearch, http.Get, "/not_recorded", "")
-          use Nil <- result.try(recorder.stop(started))
+          use #(opensearch, started) <- result.try(recorded_client(
+            recordings_directory,
+            Playback,
+          ))
+          let outcome = send_request(opensearch, Get, "/not_recorded", "")
+          use Nil <- result.try(stop(started))
           Ok(outcome)
         }
 
@@ -408,7 +399,7 @@ pub fn tests() -> TestSuite {
           result.map_error(_, fn(error) {
             case error {
               NoRecording(method:, url:, ..) -> #(method, url)
-              _ -> #("", client.describe_error(error))
+              _ -> #("", describe_error(error))
             }
           }),
         )
@@ -434,7 +425,7 @@ pub fn tests() -> TestSuite {
         ]
 
         // Act
-        let lines = list.map(errors, client.describe_error)
+        let lines = map(errors, describe_error)
 
         // Assert
         lines
@@ -453,67 +444,61 @@ pub fn tests() -> TestSuite {
     group("send_request: the request it builds", [
       it("sends given method and path", fn() {
         // Arrange
-        let server = opensearch_test_server.start(Respond(200, "{}"))
-        let os_client =
-          opensearch_cluster.client_for(opensearch_test_server.base_url(server))
+        let server = start(Respond(200, "{}"))
+        let os_client = client_for(base_url(server))
 
         // Act
-        let _ = client.send_request(os_client, http.Get, "/users/_doc/123", "")
+        let _ = send_request(os_client, Get, "/users/_doc/123", "")
 
         // Assert
-        opensearch_test_server.await_request(server)
-        |> result.map(opensearch_test_server.request_line)
+        await_request(server)
+        |> result.map(request_line)
         |> should
         |> be_equal(Ok(#("GET", "/users/_doc/123")))
         |> or_fail_with("send_request sends given method and path")
       }),
       it("sends patch method", fn() {
         // Arrange
-        let server = opensearch_test_server.start(Respond(200, "{}"))
-        let os_client =
-          opensearch_cluster.client_for(opensearch_test_server.base_url(server))
+        let server = start(Respond(200, "{}"))
+        let os_client = client_for(base_url(server))
 
         // Act
-        let _ =
-          client.send_request(os_client, http.Patch, "/users/_doc/1", "{}")
+        let _ = send_request(os_client, Patch, "/users/_doc/1", "{}")
 
         // Assert
-        opensearch_test_server.await_request(server)
-        |> result.map(opensearch_test_server.request_line)
+        await_request(server)
+        |> result.map(request_line)
         |> should
         |> be_equal(Ok(#("PATCH", "/users/_doc/1")))
         |> or_fail_with("send_request sends patch method")
       }),
       it("sends one json content type header", fn() {
         // Arrange
-        let server = opensearch_test_server.start(Respond(200, "{}"))
-        let os_client =
-          opensearch_cluster.client_for(opensearch_test_server.base_url(server))
+        let server = start(Respond(200, "{}"))
+        let os_client = client_for(base_url(server))
 
         // Act
-        let _ =
-          client.send_request(os_client, http.Post, "/users/_search", "{}")
+        let _ = send_request(os_client, Post, "/users/_search", "{}")
 
         // Assert
-        opensearch_test_server.await_request(server)
-        |> result.map(opensearch_test_server.header_values(_, "content-type"))
+        await_request(server)
+        |> result.map(header_values(_, "content-type"))
         |> should
         |> be_equal(Ok(["application/json"]))
         |> or_fail_with("send_request sends one json content type header")
       }),
       it("sends body unchanged", fn() {
         // Arrange
-        let server = opensearch_test_server.start(Respond(200, "{}"))
-        let os_client =
-          opensearch_cluster.client_for(opensearch_test_server.base_url(server))
+        let server = start(Respond(200, "{}"))
+        let os_client = client_for(base_url(server))
         let body = "{\"name\":\"O'Brien \\\"Al\\\" \\\\ zoë 日本\",\n\"x\":1}"
 
         // Act
-        let _ = client.send_request(os_client, http.Put, "/users/_doc/1", body)
+        let _ = send_request(os_client, Put, "/users/_doc/1", body)
 
         // Assert
-        opensearch_test_server.await_request(server)
-        |> result.map(opensearch_test_server.request_body)
+        await_request(server)
+        |> result.map(request_body)
         |> should
         |> be_equal(Ok(
           "{\"name\":\"O'Brien \\\"Al\\\" \\\\ zoë 日本\",\n\"x\":1}",
@@ -522,51 +507,46 @@ pub fn tests() -> TestSuite {
       }),
       it("with empty body sends empty body", fn() {
         // Arrange
-        let server = opensearch_test_server.start(Respond(200, "{}"))
-        let os_client =
-          opensearch_cluster.client_for(opensearch_test_server.base_url(server))
+        let server = start(Respond(200, "{}"))
+        let os_client = client_for(base_url(server))
 
         // Act
-        let _ = client.send_request(os_client, http.Delete, "/users", "")
+        let _ = send_request(os_client, Delete, "/users", "")
 
         // Assert
-        opensearch_test_server.await_request(server)
-        |> result.map(opensearch_test_server.request_body)
+        await_request(server)
+        |> result.map(request_body)
         |> should
         |> be_equal(Ok(""))
         |> or_fail_with("send_request with empty body sends empty body")
       }),
       it("sends one megabyte body unchanged", fn() {
         // Arrange
-        let server = opensearch_test_server.start(Respond(200, "{}"))
-        let os_client =
-          opensearch_cluster.client_for(opensearch_test_server.base_url(server))
-        let body = string.repeat("a", 1_048_576)
+        let server = start(Respond(200, "{}"))
+        let os_client = client_for(base_url(server))
+        let body = repeat("a", 1_048_576)
 
         // Act
-        let _ = client.send_request(os_client, http.Post, "/_bulk", body)
+        let _ = send_request(os_client, Post, "/_bulk", body)
 
         // Assert
-        opensearch_test_server.await_request(server)
-        |> result.map(opensearch_test_server.request_body)
+        await_request(server)
+        |> result.map(request_body)
         |> should
-        |> be_equal(Ok(string.repeat("a", 1_048_576)))
+        |> be_equal(Ok(repeat("a", 1_048_576)))
         |> or_fail_with("send_request sends one megabyte body unchanged")
       }),
       it("with trailing slash base url sends single slash path", fn() {
         // Arrange
-        let server = opensearch_test_server.start(Respond(200, "{}"))
-        let os_client =
-          opensearch_cluster.client_for(
-            opensearch_test_server.base_url(server) <> "/",
-          )
+        let server = start(Respond(200, "{}"))
+        let os_client = client_for(base_url(server) <> "/")
 
         // Act
-        let _ = client.send_request(os_client, http.Get, "/users/_search", "")
+        let _ = send_request(os_client, Get, "/users/_search", "")
 
         // Assert
-        opensearch_test_server.await_request(server)
-        |> result.map(opensearch_test_server.request_line)
+        await_request(server)
+        |> result.map(request_line)
         |> should
         |> be_equal(Ok(#("GET", "/users/_search")))
         |> or_fail_with(
@@ -575,18 +555,15 @@ pub fn tests() -> TestSuite {
       }),
       it("with base url path prefix prepends prefix", fn() {
         // Arrange
-        let server = opensearch_test_server.start(Respond(200, "{}"))
-        let os_client =
-          opensearch_cluster.client_for(
-            opensearch_test_server.base_url(server) <> "/opensearch",
-          )
+        let server = start(Respond(200, "{}"))
+        let os_client = client_for(base_url(server) <> "/opensearch")
 
         // Act
-        let _ = client.send_request(os_client, http.Get, "/users/_search", "")
+        let _ = send_request(os_client, Get, "/users/_search", "")
 
         // Assert
-        opensearch_test_server.await_request(server)
-        |> result.map(opensearch_test_server.request_line)
+        await_request(server)
+        |> result.map(request_line)
         |> should
         |> be_equal(Ok(#("GET", "/opensearch/users/_search")))
         |> or_fail_with(
@@ -595,35 +572,34 @@ pub fn tests() -> TestSuite {
       }),
       it("with empty path requests root", fn() {
         // Arrange
-        let server = opensearch_test_server.start(Respond(200, "{}"))
-        let os_client =
-          opensearch_cluster.client_for(opensearch_test_server.base_url(server))
+        let server = start(Respond(200, "{}"))
+        let os_client = client_for(base_url(server))
 
         // Act
-        let _ = client.send_request(os_client, http.Get, "", "")
+        let _ = send_request(os_client, Get, "", "")
 
         // Assert
-        opensearch_test_server.await_request(server)
-        |> result.map(opensearch_test_server.request_line)
+        await_request(server)
+        |> result.map(request_line)
         |> should
         |> be_equal(Ok(#("GET", "/")))
         |> or_fail_with("send_request with empty path requests root")
       }),
       it("with https base url starts tls handshake", fn() {
         // Arrange
-        let server = opensearch_test_server.start(CaptureRawBytes)
+        let server = start(CaptureRawBytes)
         let os_client =
-          opensearch_cluster.client_for(
+          client_for(
             "https://127.0.0.1:"
-            <> int.to_string(opensearch_test_server.port(server)),
+            <> to_string(opensearch_test_server.port(server)),
           )
 
         // Act
-        let _ = client.send_request(os_client, http.Get, "/", "")
+        let _ = send_request(os_client, Get, "/", "")
 
         // Assert: 22 (0x16) is the TLS handshake record type of a ClientHello
-        opensearch_test_server.await_raw_bytes(server)
-        |> result.try(bit_array.slice(_, 0, 1))
+        await_raw_bytes(server)
+        |> result.try(slice(_, 0, 1))
         |> should
         |> be_equal(Ok(<<22>>))
         |> or_fail_with("send_request with https base url starts tls handshake")
@@ -634,10 +610,10 @@ pub fn tests() -> TestSuite {
         // Act
         let result = {
           use body <- result.try(
-            client.send_request(opensearch_cluster.client(), http.Get, "/", "")
-            |> opensearch_cluster.as_text,
+            send_request(opensearch_cluster.client(), Get, "/", "")
+            |> as_text,
           )
-          json.parse(body, decode.at(["tagline"], decode.string))
+          parse(body, at(["tagline"], decode.string))
           |> result.replace_error("Unexpected root response: " <> body)
         }
 
@@ -650,17 +626,12 @@ pub fn tests() -> TestSuite {
       it("with 201 returns ok body", fn() {
         // Act
         let result = {
-          use os_client, index <- opensearch_cluster.with_index("users")
+          use os_client, index <- with_index("users")
           use body <- result.try(
-            client.send_request(
-              os_client,
-              http.Put,
-              "/" <> index <> "/_doc/1",
-              "{}",
-            )
-            |> opensearch_cluster.as_text,
+            send_request(os_client, Put, "/" <> index <> "/_doc/1", "{}")
+            |> as_text,
           )
-          json.parse(body, decode.at(["result"], decode.string))
+          parse(body, at(["result"], decode.string))
           |> result.replace_error("Unexpected index response: " <> body)
         }
 
@@ -672,12 +643,11 @@ pub fn tests() -> TestSuite {
       }),
       it("with 204 and empty body returns ok empty string", fn() {
         // Arrange
-        let server = opensearch_test_server.start(Respond(204, ""))
-        let os_client =
-          opensearch_cluster.client_for(opensearch_test_server.base_url(server))
+        let server = start(Respond(204, ""))
+        let os_client = client_for(base_url(server))
 
         // Act
-        let result = client.send_request(os_client, http.Get, "/", "")
+        let result = send_request(os_client, Get, "/", "")
 
         // Assert
         result
@@ -689,13 +659,11 @@ pub fn tests() -> TestSuite {
       }),
       it("with 200 non json body returns ok body unchanged", fn() {
         // Arrange
-        let server =
-          opensearch_test_server.start(Respond(200, "plain text, not JSON"))
-        let os_client =
-          opensearch_cluster.client_for(opensearch_test_server.base_url(server))
+        let server = start(Respond(200, "plain text, not JSON"))
+        let os_client = client_for(base_url(server))
 
         // Act
-        let result = client.send_request(os_client, http.Get, "/", "")
+        let result = send_request(os_client, Get, "/", "")
 
         // Assert
         result
@@ -707,12 +675,11 @@ pub fn tests() -> TestSuite {
       }),
       it("with 200 and a body that is not UTF-8 returns an error", fn() {
         // Arrange
-        let server = opensearch_test_server.start(RespondBytes(200, <<255, 0>>))
-        let os_client =
-          opensearch_cluster.client_for(opensearch_test_server.base_url(server))
+        let server = start(RespondBytes(200, <<255, 0>>))
+        let os_client = client_for(base_url(server))
 
         // Act
-        let result = client.send_request(os_client, http.Get, "/", "")
+        let result = send_request(os_client, Get, "/", "")
 
         // Assert
         result
@@ -722,12 +689,11 @@ pub fn tests() -> TestSuite {
       }),
       it("with 500 and a body that is not UTF-8 returns an error", fn() {
         // Arrange
-        let server = opensearch_test_server.start(RespondBytes(500, <<255, 0>>))
-        let os_client =
-          opensearch_cluster.client_for(opensearch_test_server.base_url(server))
+        let server = start(RespondBytes(500, <<255, 0>>))
+        let os_client = client_for(base_url(server))
 
         // Act
-        let result = client.send_request(os_client, http.Get, "/", "")
+        let result = send_request(os_client, Get, "/", "")
 
         // Assert
         result
@@ -737,13 +703,11 @@ pub fn tests() -> TestSuite {
       }),
       it("with 200 unicode body returns ok body unchanged", fn() {
         // Arrange
-        let server =
-          opensearch_test_server.start(Respond(200, "{\"name\":\"zoë 日本 🎉\"}"))
-        let os_client =
-          opensearch_cluster.client_for(opensearch_test_server.base_url(server))
+        let server = start(Respond(200, "{\"name\":\"zoë 日本 🎉\"}"))
+        let os_client = client_for(base_url(server))
 
         // Act
-        let result = client.send_request(os_client, http.Get, "/", "")
+        let result = send_request(os_client, Get, "/", "")
 
         // Assert
         result
@@ -755,12 +719,11 @@ pub fn tests() -> TestSuite {
       }),
       it("with 399 returns ok body", fn() {
         // Arrange
-        let server = opensearch_test_server.start(Respond(399, "edge"))
-        let os_client =
-          opensearch_cluster.client_for(opensearch_test_server.base_url(server))
+        let server = start(Respond(399, "edge"))
+        let os_client = client_for(base_url(server))
 
         // Act
-        let result = client.send_request(os_client, http.Get, "/", "")
+        let result = send_request(os_client, Get, "/", "")
 
         // Assert
         result
@@ -771,18 +734,13 @@ pub fn tests() -> TestSuite {
       it("with 400 returns error body", fn() {
         // Act
         let result = {
-          use os_client, index <- opensearch_cluster.with_index("users")
+          use os_client, index <- with_index("users")
           use _ <- result.try(
-            document.create_index(os_client, index, "{}")
-            |> opensearch_cluster.as_text,
+            create_index(os_client, index, "{}")
+            |> as_text,
           )
-          client.send_request(
-            os_client,
-            http.Post,
-            "/" <> index <> "/_search",
-            "{",
-          )
-          |> result.map_error(opensearch_cluster.error_type_and_status)
+          send_request(os_client, Post, "/" <> index <> "/_search", "{")
+          |> result.map_error(error_type_and_status)
           |> Ok
         }
 
@@ -795,20 +753,15 @@ pub fn tests() -> TestSuite {
       it("with 404 returns error body", fn() {
         // Act
         let result = {
-          use os_client, index <- opensearch_cluster.with_index("users")
+          use os_client, index <- with_index("users")
           use _ <- result.try(
-            document.create_index(os_client, index, "{}")
-            |> opensearch_cluster.as_text,
+            create_index(os_client, index, "{}")
+            |> as_text,
           )
           // The index name varies, so put the name of the test in its place
-          client.send_request(
-            os_client,
-            http.Get,
-            "/" <> index <> "/_doc/9",
-            "",
-          )
-          |> opensearch_cluster.rejected_body
-          |> result.map_error(string.replace(_, index, "users"))
+          send_request(os_client, Get, "/" <> index <> "/_doc/9", "")
+          |> rejected_body
+          |> result.map_error(replace(_, index, "users"))
           |> Ok
         }
 
@@ -822,13 +775,11 @@ pub fn tests() -> TestSuite {
       }),
       it("with 500 returns error body", fn() {
         // Arrange
-        let server =
-          opensearch_test_server.start(Respond(500, "{\"status\":500}"))
-        let os_client =
-          opensearch_cluster.client_for(opensearch_test_server.base_url(server))
+        let server = start(Respond(500, "{\"status\":500}"))
+        let os_client = client_for(base_url(server))
 
         // Act
-        let result = client.send_request(os_client, http.Get, "/", "")
+        let result = send_request(os_client, Get, "/", "")
 
         // Assert
         result
@@ -840,13 +791,11 @@ pub fn tests() -> TestSuite {
       }),
       it("with 503 non json body returns error body", fn() {
         // Arrange
-        let server =
-          opensearch_test_server.start(Respond(503, "Service Unavailable"))
-        let os_client =
-          opensearch_cluster.client_for(opensearch_test_server.base_url(server))
+        let server = start(Respond(503, "Service Unavailable"))
+        let os_client = client_for(base_url(server))
 
         // Act
-        let result = client.send_request(os_client, http.Get, "/", "")
+        let result = send_request(os_client, Get, "/", "")
 
         // Assert
         result
@@ -860,12 +809,11 @@ pub fn tests() -> TestSuite {
       }),
       it("with error status and empty body returns error empty string", fn() {
         // Arrange
-        let server = opensearch_test_server.start(Respond(502, ""))
-        let os_client =
-          opensearch_cluster.client_for(opensearch_test_server.base_url(server))
+        let server = start(Respond(502, ""))
+        let os_client = client_for(base_url(server))
 
         // Act
-        let result = client.send_request(os_client, http.Get, "/", "")
+        let result = send_request(os_client, Get, "/", "")
 
         // Assert
         result
@@ -877,13 +825,10 @@ pub fn tests() -> TestSuite {
       }),
       it("when nothing listens returns connection error", fn() {
         // Arrange
-        let os_client =
-          opensearch_cluster.client_for(
-            opensearch_test_server.unreachable_base_url(),
-          )
+        let os_client = client_for(unreachable_base_url())
 
         // Act
-        let result = client.send_request(os_client, http.Get, "/", "")
+        let result = send_request(os_client, Get, "/", "")
 
         // Assert
         result
@@ -899,18 +844,15 @@ pub fn tests() -> TestSuite {
     group("send_request: credentials in the base URL", [
       it("with user and password sends basic authorization", fn() {
         // Arrange
-        let server = opensearch_test_server.start(Respond(200, "{}"))
-        let os_client =
-          opensearch_cluster.client_for(
-            opensearch_test_server.base_url_with_userinfo(server, "user:pass"),
-          )
+        let server = start(Respond(200, "{}"))
+        let os_client = client_for(base_url_with_userinfo(server, "user:pass"))
 
         // Act
-        let _ = client.send_request(os_client, http.Get, "/users/_search", "")
+        let _ = send_request(os_client, Get, "/users/_search", "")
 
         // Assert: base64 of "user:pass"
-        opensearch_test_server.await_request(server)
-        |> result.map(opensearch_test_server.header_values(_, "authorization"))
+        await_request(server)
+        |> result.map(header_values(_, "authorization"))
         |> should
         |> be_equal(Ok(["Basic dXNlcjpwYXNz"]))
         |> or_fail_with(
@@ -919,18 +861,16 @@ pub fn tests() -> TestSuite {
       }),
       it("with percent encoded at in password decodes it", fn() {
         // Arrange
-        let server = opensearch_test_server.start(Respond(200, "{}"))
+        let server = start(Respond(200, "{}"))
         let os_client =
-          opensearch_cluster.client_for(
-            opensearch_test_server.base_url_with_userinfo(server, "user:p%40ss"),
-          )
+          client_for(base_url_with_userinfo(server, "user:p%40ss"))
 
         // Act
-        let _ = client.send_request(os_client, http.Get, "/", "")
+        let _ = send_request(os_client, Get, "/", "")
 
         // Assert: base64 of "user:p@ss"
-        opensearch_test_server.await_request(server)
-        |> result.map(opensearch_test_server.header_values(_, "authorization"))
+        await_request(server)
+        |> result.map(header_values(_, "authorization"))
         |> should
         |> be_equal(Ok(["Basic dXNlcjpwQHNz"]))
         |> or_fail_with(
@@ -939,21 +879,16 @@ pub fn tests() -> TestSuite {
       }),
       it("with percent encoded colon and slash in password decodes them", fn() {
         // Arrange
-        let server = opensearch_test_server.start(Respond(200, "{}"))
+        let server = start(Respond(200, "{}"))
         let os_client =
-          opensearch_cluster.client_for(
-            opensearch_test_server.base_url_with_userinfo(
-              server,
-              "user:p%40%3A%2Fss",
-            ),
-          )
+          client_for(base_url_with_userinfo(server, "user:p%40%3A%2Fss"))
 
         // Act
-        let _ = client.send_request(os_client, http.Get, "/", "")
+        let _ = send_request(os_client, Get, "/", "")
 
         // Assert: base64 of "user:p@:/ss"
-        opensearch_test_server.await_request(server)
-        |> result.map(opensearch_test_server.header_values(_, "authorization"))
+        await_request(server)
+        |> result.map(header_values(_, "authorization"))
         |> should
         |> be_equal(Ok(["Basic dXNlcjpwQDovc3M="]))
         |> or_fail_with(
@@ -962,14 +897,11 @@ pub fn tests() -> TestSuite {
       }),
       it("with user and no password returns ok body", fn() {
         // Arrange
-        let server = opensearch_test_server.start(Respond(200, "{}"))
-        let os_client =
-          opensearch_cluster.client_for(
-            opensearch_test_server.base_url_with_userinfo(server, "user"),
-          )
+        let server = start(Respond(200, "{}"))
+        let os_client = client_for(base_url_with_userinfo(server, "user"))
 
         // Act
-        let result = client.send_request(os_client, http.Get, "/", "")
+        let result = send_request(os_client, Get, "/", "")
 
         // Assert
         result
@@ -981,18 +913,15 @@ pub fn tests() -> TestSuite {
       }),
       it("with user and no password sends empty password", fn() {
         // Arrange
-        let server = opensearch_test_server.start(Respond(200, "{}"))
-        let os_client =
-          opensearch_cluster.client_for(
-            opensearch_test_server.base_url_with_userinfo(server, "user"),
-          )
+        let server = start(Respond(200, "{}"))
+        let os_client = client_for(base_url_with_userinfo(server, "user"))
 
         // Act
-        let _ = client.send_request(os_client, http.Get, "/", "")
+        let _ = send_request(os_client, Get, "/", "")
 
         // Assert: base64 of "user:"
-        opensearch_test_server.await_request(server)
-        |> result.map(opensearch_test_server.header_values(_, "authorization"))
+        await_request(server)
+        |> result.map(header_values(_, "authorization"))
         |> should
         |> be_equal(Ok(["Basic dXNlcjo="]))
         |> or_fail_with(
@@ -1001,16 +930,15 @@ pub fn tests() -> TestSuite {
       }),
       it("without credentials sends no authorization", fn() {
         // Arrange
-        let server = opensearch_test_server.start(Respond(200, "{}"))
-        let os_client =
-          opensearch_cluster.client_for(opensearch_test_server.base_url(server))
+        let server = start(Respond(200, "{}"))
+        let os_client = client_for(base_url(server))
 
         // Act
-        let _ = client.send_request(os_client, http.Get, "/", "")
+        let _ = send_request(os_client, Get, "/", "")
 
         // Assert
-        opensearch_test_server.await_request(server)
-        |> result.map(opensearch_test_server.header_values(_, "authorization"))
+        await_request(server)
+        |> result.map(header_values(_, "authorization"))
         |> should
         |> be_equal(Ok([]))
         |> or_fail_with(
@@ -1019,18 +947,15 @@ pub fn tests() -> TestSuite {
       }),
       it("with credentials keeps them out of the request line", fn() {
         // Arrange
-        let server = opensearch_test_server.start(Respond(200, "{}"))
-        let os_client =
-          opensearch_cluster.client_for(
-            opensearch_test_server.base_url_with_userinfo(server, "user:pass"),
-          )
+        let server = start(Respond(200, "{}"))
+        let os_client = client_for(base_url_with_userinfo(server, "user:pass"))
 
         // Act
-        let _ = client.send_request(os_client, http.Get, "/users/_search", "")
+        let _ = send_request(os_client, Get, "/users/_search", "")
 
         // Assert
-        opensearch_test_server.await_request(server)
-        |> result.map(opensearch_test_server.request_line)
+        await_request(server)
+        |> result.map(request_line)
         |> should
         |> be_equal(Ok(#("GET", "/users/_search")))
         |> or_fail_with(
@@ -1039,20 +964,17 @@ pub fn tests() -> TestSuite {
       }),
       it("with credentials keeps them out of the host header", fn() {
         // Arrange
-        let server = opensearch_test_server.start(Respond(200, "{}"))
-        let os_client =
-          opensearch_cluster.client_for(
-            opensearch_test_server.base_url_with_userinfo(server, "user:pass"),
-          )
+        let server = start(Respond(200, "{}"))
+        let os_client = client_for(base_url_with_userinfo(server, "user:pass"))
         let expected_host =
-          "127.0.0.1:" <> int.to_string(opensearch_test_server.port(server))
+          "127.0.0.1:" <> to_string(opensearch_test_server.port(server))
 
         // Act
-        let _ = client.send_request(os_client, http.Get, "/users/_search", "")
+        let _ = send_request(os_client, Get, "/users/_search", "")
 
         // Assert
-        opensearch_test_server.await_request(server)
-        |> result.map(opensearch_test_server.header_values(_, "host"))
+        await_request(server)
+        |> result.map(header_values(_, "host"))
         |> should
         |> be_equal(Ok([expected_host]))
         |> or_fail_with(
@@ -1061,19 +983,15 @@ pub fn tests() -> TestSuite {
       }),
       it("with credentials and query string keeps query", fn() {
         // Arrange
-        let server = opensearch_test_server.start(Respond(200, "{}"))
-        let os_client =
-          opensearch_cluster.client_for(
-            opensearch_test_server.base_url_with_userinfo(server, "user:pass"),
-          )
+        let server = start(Respond(200, "{}"))
+        let os_client = client_for(base_url_with_userinfo(server, "user:pass"))
 
         // Act
-        let _ =
-          client.send_request(os_client, http.Get, "/users/_search?size=5", "")
+        let _ = send_request(os_client, Get, "/users/_search?size=5", "")
 
         // Assert
-        opensearch_test_server.await_request(server)
-        |> result.map(opensearch_test_server.request_line)
+        await_request(server)
+        |> result.map(request_line)
         |> should
         |> be_equal(Ok(#("GET", "/users/_search?size=5")))
         |> or_fail_with(
@@ -1083,13 +1001,12 @@ pub fn tests() -> TestSuite {
       it("with credentials when nothing listens hides password", fn() {
         // Arrange
         let os_client =
-          opensearch_cluster.client_for(
-            "http://user:secret-password@127.0.0.1:"
-            <> int.to_string(opensearch_test_server.unused_port()),
+          client_for(
+            "http://user:secret-password@127.0.0.1:" <> to_string(unused_port()),
           )
 
         // Act
-        let result = client.send_request(os_client, http.Get, "/", "")
+        let result = send_request(os_client, Get, "/", "")
 
         // Assert
         result
@@ -1106,11 +1023,10 @@ pub fn tests() -> TestSuite {
       it("with a host that does not resolve returns the lookup error", fn() {
         // Arrange: a base URL with no port; the .invalid top-level domain never
         // resolves (RFC 6761)
-        let os_client =
-          opensearch_cluster.client_for("http://opensearch.invalid")
+        let os_client = client_for("http://opensearch.invalid")
 
         // Act
-        let result = client.send_request(os_client, http.Get, "/", "")
+        let result = send_request(os_client, Get, "/", "")
 
         // Assert
         result

@@ -46,11 +46,14 @@
 //// JSON objects and convert them to strings with `json.to_string()`.
 
 import dream_opensearch/client.{type Client, type OpenSearchError}
-import gleam/bit_array
-import gleam/http
-import gleam/int
-import gleam/list
-import gleam/string
+import gleam/bit_array.{from_string}
+import gleam/http.{type Method, Delete, Post, Put}
+import gleam/int.{to_base16}
+import gleam/list.{map}
+import gleam/string.{
+  concat, from_utf_codepoints, pad_start, to_utf_codepoints,
+  utf_codepoint_to_int,
+}
 
 /// Index a document in OpenSearch
 ///
@@ -109,7 +112,7 @@ pub fn index(
   document_id: String,
   document_json: String,
 ) -> Result(String, OpenSearchError) {
-  send(client, http.Put, [index_name, "_doc", document_id], document_json)
+  send(client, Put, [index_name, "_doc", document_id], document_json)
 }
 
 /// Search documents in an index
@@ -162,7 +165,7 @@ pub fn search(
   index_name: String,
   query_json: String,
 ) -> Result(String, OpenSearchError) {
-  send(client, http.Post, [index_name, "_search"], query_json)
+  send(client, Post, [index_name, "_search"], query_json)
 }
 
 /// Delete a document from an index
@@ -211,7 +214,7 @@ pub fn delete(
   index_name: String,
   document_id: String,
 ) -> Result(String, OpenSearchError) {
-  send(client, http.Delete, [index_name, "_doc", document_id], "")
+  send(client, Delete, [index_name, "_doc", document_id], "")
 }
 
 /// Create an index with mapping
@@ -277,7 +280,7 @@ pub fn create_index(
   index_name: String,
   mapping_json: String,
 ) -> Result(String, OpenSearchError) {
-  send(client, http.Put, [index_name], mapping_json)
+  send(client, Put, [index_name], mapping_json)
 }
 
 /// Delete an index
@@ -325,7 +328,7 @@ pub fn delete_index(
   client: Client,
   index_name: String,
 ) -> Result(String, OpenSearchError) {
-  send(client, http.Delete, [index_name], "")
+  send(client, Delete, [index_name], "")
 }
 
 /// Bulk index documents
@@ -381,7 +384,7 @@ pub fn delete_index(
 /// }
 /// ```
 pub fn bulk(client: Client, ndjson: String) -> Result(String, OpenSearchError) {
-  send(client, http.Post, ["_bulk"], ndjson)
+  send(client, Post, ["_bulk"], ndjson)
 }
 
 /// Sends a request to the path made of `segments`. Every function of this
@@ -389,14 +392,14 @@ pub fn bulk(client: Client, ndjson: String) -> Result(String, OpenSearchError) {
 /// path is percent-encoded.
 fn send(
   client: Client,
-  method: http.Method,
+  method: Method,
   segments: List(String),
   body: String,
 ) -> Result(String, OpenSearchError) {
   let path =
     segments
-    |> list.map(fn(segment) { "/" <> encode_segment(segment) })
-    |> string.concat
+    |> map(fn(segment) { "/" <> encode_segment(segment) })
+    |> concat
   client.send_request(client, method, path, body)
 }
 
@@ -406,16 +409,16 @@ fn send(
 /// `/`, `#`, `?`, `%` and spaces in a name or an ID stay part of it.
 fn encode_segment(segment: String) -> String {
   segment
-  |> string.to_utf_codepoints
-  |> list.map(encode_codepoint)
-  |> string.concat
+  |> to_utf_codepoints
+  |> map(encode_codepoint)
+  |> concat
 }
 
 fn encode_codepoint(codepoint: UtfCodepoint) -> String {
-  let character = string.from_utf_codepoints([codepoint])
-  case is_unreserved(string.utf_codepoint_to_int(codepoint)) {
+  let character = from_utf_codepoints([codepoint])
+  case is_unreserved(utf_codepoint_to_int(codepoint)) {
     True -> character
-    False -> encode_bytes(bit_array.from_string(character), "")
+    False -> encode_bytes(from_string(character), "")
   }
 }
 
@@ -424,9 +427,7 @@ fn encode_bytes(bytes: BitArray, encoded: String) -> String {
     <<byte, rest:bytes>> ->
       encode_bytes(
         rest,
-        encoded
-          <> "%"
-          <> string.pad_start(int.to_base16(byte), to: 2, with: "0"),
+        encoded <> "%" <> pad_start(to_base16(byte), to: 2, with: "0"),
       )
     _ -> encoded
   }
