@@ -10,13 +10,14 @@
 //// statuses such as 204, 399, 500 and 503, a body that is not JSON or not
 //// UTF-8, and a TLS handshake.
 
-import dream_errors
+import dream_errors.{Conflict, Failed, Invalid, NotFound, Timeout}
 import dream_http_client/client as http_client
 import dream_http_client/recorder
 import dream_opensearch/client.{
   InvalidResponseBody, InvalidUrl, NoRecording, Rejected, TimedOut, Unavailable,
+  to_error,
 }
-import dream_opensearch/document
+import dream_opensearch/document.{create_index}
 import dream_test/matchers.{be_equal, or_fail_with, should}
 import dream_test/suite.{type TestSuite}
 import dream_test/unit.{describe, group, it}
@@ -27,12 +28,12 @@ import gleam/int
 import gleam/json
 import gleam/list
 import gleam/result
-import gleam/string
-import opensearch_cluster
+import gleam/string.{inspect, replace}
+import opensearch_cluster.{as_text, with_index}
 import opensearch_test_server.{
   type TestServer, CaptureRawBytes, HoldWithoutAnswer, Respond, RespondBytes,
 }
-import snippets/doc_client_to_error
+import snippets/doc_client_to_error.{get_document}
 
 /// The recordings of the recorded round trip. Record them again with
 /// `RECORD_OPENSEARCH=true gleam test`, with the cluster of
@@ -1130,12 +1131,12 @@ pub fn tests() -> TestSuite {
         let error = InvalidUrl("the URL has no host")
 
         // Act
-        let result = client.to_error(error)
+        let result = to_error(error)
 
         // Assert
         result
         |> should
-        |> be_equal(dream_errors.Invalid(
+        |> be_equal(Invalid(
           "Invalid OpenSearch URL: the URL has no host",
           InvalidUrl("the URL has no host"),
         ))
@@ -1146,7 +1147,7 @@ pub fn tests() -> TestSuite {
         let error = Unavailable("Connection failed: Connection refused")
 
         // Act
-        let result = client.to_error(error)
+        let result = to_error(error)
 
         // Assert
         result
@@ -1162,12 +1163,12 @@ pub fn tests() -> TestSuite {
         let error = TimedOut(timeout_ms: 30_000)
 
         // Act
-        let result = client.to_error(error)
+        let result = to_error(error)
 
         // Assert
         result
         |> should
-        |> be_equal(dream_errors.Timeout(
+        |> be_equal(Timeout(
           "OpenSearch sent no answer within 30000 ms",
           TimedOut(timeout_ms: 30_000),
         ))
@@ -1178,12 +1179,12 @@ pub fn tests() -> TestSuite {
         let error = Rejected(status: 404, body: "{\"found\":false}")
 
         // Act
-        let result = client.to_error(error)
+        let result = to_error(error)
 
         // Assert
         result
         |> should
-        |> be_equal(dream_errors.NotFound(
+        |> be_equal(NotFound(
           "OpenSearch rejected the request with status 404: {\"found\":false}",
         ))
         |> or_fail_with("Should maps Rejected with status 404 to NotFound")
@@ -1193,12 +1194,12 @@ pub fn tests() -> TestSuite {
         let error = Rejected(status: 409, body: "{\"status\":409}")
 
         // Act
-        let result = client.to_error(error)
+        let result = to_error(error)
 
         // Assert
         result
         |> should
-        |> be_equal(dream_errors.Conflict(
+        |> be_equal(Conflict(
           "OpenSearch rejected the request with status 409: {\"status\":409}",
           Rejected(status: 409, body: "{\"status\":409}"),
         ))
@@ -1209,12 +1210,12 @@ pub fn tests() -> TestSuite {
         let error = Rejected(status: 400, body: "{\"status\":400}")
 
         // Act
-        let result = client.to_error(error)
+        let result = to_error(error)
 
         // Assert
         result
         |> should
-        |> be_equal(dream_errors.Failed(
+        |> be_equal(Failed(
           "OpenSearch rejected the request with status 400: {\"status\":400}",
           Rejected(status: 400, body: "{\"status\":400}"),
         ))
@@ -1225,12 +1226,12 @@ pub fn tests() -> TestSuite {
         let error = InvalidResponseBody(status: 200)
 
         // Act
-        let result = client.to_error(error)
+        let result = to_error(error)
 
         // Assert
         result
         |> should
-        |> be_equal(dream_errors.Failed(
+        |> be_equal(Failed(
           "The OpenSearch response body is not valid UTF-8 (status 200)",
           InvalidResponseBody(status: 200),
         ))
@@ -1246,12 +1247,12 @@ pub fn tests() -> TestSuite {
           )
 
         // Act
-        let result = client.to_error(error)
+        let result = to_error(error)
 
         // Assert
         result
         |> should
-        |> be_equal(dream_errors.Failed(
+        |> be_equal(Failed(
           "No recording for the OpenSearch request: No recording for GET http://localhost:9201/",
           NoRecording(
             method: "GET",
@@ -1264,16 +1265,16 @@ pub fn tests() -> TestSuite {
       it("the doc snippet maps a missing document to NotFound", fn() {
         // Arrange and act
         let result = {
-          use os_client, index <- opensearch_cluster.with_index("users")
+          use os_client, index <- with_index("users")
           use _ <- result.try(
-            document.create_index(os_client, index, "{}")
-            |> opensearch_cluster.as_text,
+            create_index(os_client, index, "{}")
+            |> as_text,
           )
           // The index name varies, so put the name of the test in its place
-          case doc_client_to_error.get_document(os_client, index, "9") {
-            Error(dream_errors.NotFound(message)) ->
-              Ok(Error(string.replace(message, index, "users")))
-            other -> Ok(Ok(string.inspect(other)))
+          case get_document(os_client, index, "9") {
+            Error(NotFound(message)) ->
+              Ok(Error(replace(message, index, "users")))
+            other -> Ok(Ok(inspect(other)))
           }
         }
 

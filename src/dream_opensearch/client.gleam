@@ -56,7 +56,7 @@
 //// Every function returns `OpenSearchError` for a failure. Match on its
 //// variants to decide what to do, and use `describe_error` for a log line.
 
-import dream_errors
+import dream_errors.{type Error, Conflict, Failed, Invalid, NotFound, Timeout}
 import dream_http_client/client as http_client
 import gleam/bit_array
 import gleam/http
@@ -416,33 +416,33 @@ pub fn describe_error(error: OpenSearchError) -> String {
 ///
 /// ## Example
 ///
-/// ### Read a document with the shared error <a href="https://github.com/TrustBound/dream_opensearch/blob/4.1.0/test/snippets/doc_client_to_error.gleam#L3-L15"><img align="right" alt="Tested snippet" src="https://img.shields.io/badge/%F0%9F%A7%AA_tested-snippet-lightgreen.svg?style=flat-square"></a>
+/// ### Read a document with the shared error <a href="https://github.com/TrustBound/dream_opensearch/blob/4.1.0/test/snippets/doc_client_to_error.gleam#L5-L17"><img align="right" alt="Tested snippet" src="https://img.shields.io/badge/%F0%9F%A7%AA_tested-snippet-lightgreen.svg?style=flat-square"></a>
 ///
 /// ```gleam
-/// import dream_errors
-/// import dream_opensearch/client.{type Client, type OpenSearchError}
-/// import gleam/http
-/// import gleam/result
+///   type Client, type OpenSearchError, send_request, to_error,
+/// }
+/// import gleam/http.{Get}
+/// import gleam/result.{map_error}
 ///
 /// pub fn get_document(
 ///   opensearch: Client,
 ///   index: String,
 ///   id: String,
-/// ) -> Result(String, dream_errors.Error(OpenSearchError)) {
-///   client.send_request(opensearch, http.Get, "/" <> index <> "/_doc/" <> id, "")
-///   |> result.map_error(client.to_error)
+/// ) -> Result(String, Error(OpenSearchError)) {
+///   send_request(opensearch, Get, "/" <> index <> "/_doc/" <> id, "")
+///   |> map_error(to_error)
 /// }
 /// ```
-pub fn to_error(error: OpenSearchError) -> dream_errors.Error(OpenSearchError) {
+pub fn to_error(error: OpenSearchError) -> Error(OpenSearchError) {
   let message = describe_error(error)
   case error {
-    InvalidUrl(..) -> dream_errors.Invalid(message, error)
+    InvalidUrl(..) -> Invalid(message, error)
     Unavailable(..) -> dream_errors.Unavailable(message, error)
-    TimedOut(..) -> dream_errors.Timeout(message, error)
-    Rejected(status: 404, ..) -> dream_errors.NotFound(message)
-    Rejected(status: 409, ..) -> dream_errors.Conflict(message, error)
+    TimedOut(..) -> Timeout(message, error)
+    Rejected(status: 404, ..) -> NotFound(message)
+    Rejected(status: 409, ..) -> Conflict(message, error)
     Rejected(..) | InvalidResponseBody(..) | NoRecording(..) ->
-      dream_errors.Failed(message, error)
+      Failed(message, error)
   }
 }
 

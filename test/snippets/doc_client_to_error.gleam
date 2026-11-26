@@ -1,15 +1,17 @@
 //// Example for the `client.to_error` doc.
 
-import dream_errors
-import dream_opensearch/client.{type Client, type OpenSearchError}
-import gleam/http
-import gleam/result
+import dream_errors.{type Error}
+import dream_opensearch/client.{
+  type Client, type OpenSearchError, send_request, to_error,
+}
+import gleam/http.{Get}
+import gleam/result.{map_error}
 
 pub fn get_document(
   opensearch: Client,
   index: String,
   id: String,
-) -> Result(String, dream_errors.Error(OpenSearchError)) {
-  client.send_request(opensearch, http.Get, "/" <> index <> "/_doc/" <> id, "")
-  |> result.map_error(client.to_error)
+) -> Result(String, Error(OpenSearchError)) {
+  send_request(opensearch, Get, "/" <> index <> "/_doc/" <> id, "")
+  |> map_error(to_error)
 }

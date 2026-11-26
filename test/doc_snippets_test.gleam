@@ -12,14 +12,14 @@ import dream_test/suite.{type TestSuite}
 import dream_test/unit.{describe, group, it}
 import gleam/dynamic/decode
 import gleam/http
-import gleam/int
+import gleam/int.{to_string}
 import gleam/json
 import gleam/list
 import gleam/result
 import gleam/string
-import opensearch_cluster
-import opensearch_test_server
-import snippets/doc_client_describe_error
+import opensearch_cluster.{client_for}
+import opensearch_test_server.{unused_port}
+import snippets/doc_client_describe_error.{health_line}
 import snippets/doc_client_new
 import snippets/doc_client_quick_start
 import snippets/doc_client_send_request
@@ -152,7 +152,7 @@ pub fn tests() -> TestSuite {
         let opensearch = opensearch_cluster.client()
 
         // Act
-        let line = doc_client_describe_error.health_line(opensearch)
+        let line = health_line(opensearch)
 
         // Assert
         line
@@ -163,13 +163,10 @@ pub fn tests() -> TestSuite {
       it("health line describes a refused connection", fn() {
         // Arrange
         let opensearch =
-          opensearch_cluster.client_for(
-            "http://127.0.0.1:"
-            <> int.to_string(opensearch_test_server.unused_port()),
-          )
+          client_for("http://127.0.0.1:" <> to_string(unused_port()))
 
         // Act
-        let line = doc_client_describe_error.health_line(opensearch)
+        let line = health_line(opensearch)
 
         // Assert
         line
