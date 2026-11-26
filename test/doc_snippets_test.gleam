@@ -12,11 +12,14 @@ import dream_test/suite.{type TestSuite}
 import dream_test/unit.{describe, group, it}
 import gleam/dynamic/decode
 import gleam/http
+import gleam/int
 import gleam/json
 import gleam/list
 import gleam/result
 import gleam/string
 import opensearch_cluster
+import opensearch_test_server
+import snippets/doc_client_describe_error
 import snippets/doc_client_new
 import snippets/doc_client_quick_start
 import snippets/doc_client_send_request
@@ -141,6 +144,40 @@ pub fn tests() -> TestSuite {
         |> should
         |> be_equal(Ok(#("created", "Alice")))
         |> or_fail_with("Alice should be stored under 123")
+      }),
+    ]),
+    group("client.describe_error", [
+      it("health line says OpenSearch is healthy", fn() {
+        // Arrange
+        let opensearch = opensearch_cluster.client()
+
+        // Act
+        let line = doc_client_describe_error.health_line(opensearch)
+
+        // Assert
+        line
+        |> should
+        |> be_equal("OpenSearch is healthy")
+        |> or_fail_with("health line says OpenSearch is healthy")
+      }),
+      it("health line describes a refused connection", fn() {
+        // Arrange
+        let opensearch =
+          opensearch_cluster.client_for(
+            "http://127.0.0.1:"
+            <> int.to_string(opensearch_test_server.unused_port()),
+          )
+
+        // Act
+        let line = doc_client_describe_error.health_line(opensearch)
+
+        // Assert
+        line
+        |> should
+        |> be_equal(
+          "OpenSearch is unavailable: Connection failed: Connection refused",
+        )
+        |> or_fail_with("health line describes a refused connection")
       }),
     ]),
     group("client.new", [
