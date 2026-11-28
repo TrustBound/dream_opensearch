@@ -18,28 +18,51 @@
 
 <br />
 
-# dream_opensearch
+## What is Dream OpenSearch?
 
-A standalone HTTP client for OpenSearch (or Elasticsearch) clusters. It indexes, searches and deletes documents, and manages indices. It is built with the same quality standards as [Dream](https://github.com/TrustBound/dream), but it is completely independent. Use it in any Gleam project.
+Dream OpenSearch is an HTTP client for OpenSearch, and for Elasticsearch clusters with the same document and search APIs. It indexes, searches and deletes documents, loads them in bulk and manages indexes, with a function for each job. Every failure comes back as a typed error, so you match on `Rejected`, `Unavailable` or `TimedOut` and decide what to retry. It has no dependency on the rest of Dream.
 
 ## Features
 
-- ✅ Document indexing and deletion
-- ✅ Full-text search
-- ✅ Index management
-- ✅ Bulk operations
-- ✅ Query builder helpers
-- ✅ Typed errors: match on `Rejected`, `Unavailable`, `TimedOut` and more
-- ✅ A client from a `dream_http_client` request, for a timeout, a recorder or a certificate authority
-- ✅ Zero dependencies on Dream or other frameworks
+### Documents
 
-## Installation
+Save, search for and delete documents with one function each. [Read more](https://github.com/TrustBound/dream_opensearch/blob/main/docs/guides/getting-started.md).
 
-```bash
-gleam add dream_opensearch
-```
+| Feature                 | What you get                                                                  |
+| ----------------------- | ----------------------------------------------------------------------------- |
+| 📝 **Index and delete** | `document.index` and `document.delete` take the index, the id and a JSON body |
+| 🔎 **Full-text search** | `document.search` runs a query and returns the response body for you to read  |
+| 🧱 **Query builders**   | `match`, `term`, `range` and `match_all` build the query body                 |
 
-## Quick Start
+### Searching
+
+Queries, pages and sorting, and reading the hits into your own types. [Read more](https://github.com/TrustBound/dream_opensearch/blob/main/docs/guides/searching.md).
+
+| Feature                      | What you get                                                              |
+| ---------------------------- | ------------------------------------------------------------------------- |
+| 🧭 **Match, term and range** | The right query for text, exact values and ranges                         |
+| 🧩 **Bool queries**          | Combine conditions, page and sort with a body you build with `gleam/json` |
+
+### Indexes and bulk loading
+
+Create indexes with a mapping and load many documents in one request. [Read more](https://github.com/TrustBound/dream_opensearch/blob/main/docs/guides/managing-indexes.md).
+
+| Feature                 | What you get                                                                                  |
+| ----------------------- | --------------------------------------------------------------------------------------------- |
+| 🗂️ **Index management** | Create an index with settings and a mapping, and delete it                                    |
+| 📦 **Bulk loading**     | `document.bulk` loads many documents in one request, and the guide finds the ones that failed |
+
+### Typed errors
+
+Every failure is a value you match on. [Read more](https://github.com/TrustBound/dream_opensearch/blob/main/docs/guides/handling-errors.md).
+
+| Feature                          | What you get                                                                                             |
+| -------------------------------- | -------------------------------------------------------------------------------------------------------- |
+| 🚦 **Typed errors**              | `Rejected`, `Unavailable`, `TimedOut`, `InvalidUrl` and more                                             |
+| 🔐 **Logs without the password** | The user name and password of the URL stay out of what you log                                           |
+| ⏱️ **Your own client settings**   | Build the client from a `dream_http_client` request for a timeout, a recorder or a certificate authority |
+
+## A Quick Example
 
 ### Index, search and delete a document <a href="https://github.com/TrustBound/dream_opensearch/blob/4.0.0/test/snippets/readme_quick_start.gleam#L5-L34"><img align="right" alt="Tested snippet" src="https://img.shields.io/badge/%F0%9F%A7%AA_tested-snippet-lightgreen.svg?style=flat-square"></a> <a href="https://github.com/TrustBound/dream_opensearch/blob/4.0.0/docs/guides/getting-started.md#index-search-and-delete-a-document-"><img align="right" alt="Guide: Getting started" title="Guide: Getting started" src="https://img.shields.io/badge/%F0%9F%93%96_read-guide-blue.svg?style=flat-square"></a>
 
@@ -76,6 +99,14 @@ pub fn delete_alice(opensearch: Client) -> Result(String, OpenSearchError) {
 }
 ```
 
+**Run this:** `index_alice(opensearch)` → `Ok(body)`, the response of the cluster; `search_for_alice(opensearch)` then finds the document, and `delete_alice(opensearch)` removes it.
+
+## Installation
+
+```sh
+gleam add dream_opensearch gleam_json
+```
+
 ## Guides
 
 - [Getting started](https://github.com/TrustBound/dream_opensearch/blob/main/docs/guides/getting-started.md): connect to a local or a secured cluster, then save, search for and delete documents from a Gleam module, with tests
@@ -84,27 +115,23 @@ pub fn delete_alice(opensearch: Client) -> Result(String, OpenSearchError) {
 - [Managing indexes](https://github.com/TrustBound/dream_opensearch/blob/main/docs/guides/managing-indexes.md): create an index with settings and a mapping, check, refresh, count, copy and delete indexes
 - [Handling errors](https://github.com/TrustBound/dream_opensearch/blob/main/docs/guides/handling-errors.md): every error the client returns, the details of an OpenSearch error, what to retry, logs without the password, and the timeout
 - [Upgrading](https://github.com/TrustBound/dream_opensearch/blob/main/docs/guides/upgrading.md): the code changes from 3.x to 4.0.0, before and after
+- [API reference](https://hexdocs.pm/dream_opensearch): every module and function on HexDocs
 
-## API Reference
+## Requirements
 
-The full API reference is on [HexDocs](https://hexdocs.pm/dream_opensearch). The guides show each function where a task needs it.
-
-## Design Principles
-
-dream_opensearch follows Dream's [design principles](https://github.com/TrustBound/dream/blob/release/3.0.0/docs/reference/design-principles.md) and [contributing guide](https://github.com/TrustBound/dream/blob/release/3.0.0/docs/contributing/contributing.md).
+- Gleam 1.19.2 or newer on Erlang/OTP 28 (the versions CI uses). Dream OpenSearch runs on Erlang.
+- An OpenSearch cluster. The tests run against OpenSearch 2.19.1.
 
 ## About Dream
 
 [Dream](https://github.com/TrustBound/dream) is a collection of Gleam packages for building production web applications. Each package implements its standards completely, shares the same naming and style as the others, and is fully tested. TrustBound builds Dream for its own production systems and shares it in the hope that it helps yours.
 
-dream_opensearch works on its own. You don't need the rest of Dream to use it.
+Dream OpenSearch works on its own. You don't need the rest of Dream to use it.
+
+## Contributing
+
+See [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## License
 
 MIT — see [LICENSE.md](https://github.com/TrustBound/dream_opensearch/blob/main/LICENSE.md)
-
----
-
-<div align="center">
-  <sub>Built in Gleam, on the BEAM, by the <a href="https://github.com/trustbound/dream">Dream Team</a> ❤️</sub>
-</div>
