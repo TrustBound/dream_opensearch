@@ -20,7 +20,7 @@
 
 ## What is Dream OpenSearch?
 
-Dream OpenSearch is an HTTP client for OpenSearch, and for Elasticsearch clusters with the same document and search APIs. It indexes, searches and deletes documents, loads them in bulk and manages indexes, with a function for each job. Every failure comes back as a typed error, so you match on `Rejected`, `Unavailable` or `TimedOut` and decide what to retry. It has no dependency on the rest of Dream.
+Dream OpenSearch is an HTTP client for OpenSearch, and for Elasticsearch clusters with the same document and search APIs. It indexes, searches and deletes documents, loads them in bulk and manages indexes, with a function for each job. Every failure comes back as a typed error, so you match on `Rejected`, `Unavailable` or `TimedOut` and decide what to retry.
 
 ## Features
 
